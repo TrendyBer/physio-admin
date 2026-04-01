@@ -11,7 +11,9 @@ import ReviewsPage from "./ReviewsPage";
 import CategoriesPage from "./CategoriesPage";
 import ReportsPage from "./ReportsPage";
 import SettingsPage from "./SettingsPage";
-// ── PLACEHOLDER για τα υπόλοιπα modules (θα τα φτιάξουμε μετά) ──
+import BlogPage from "./BlogPage";
+
+// ── PLACEHOLDER ───────────────────────────────────────────
 function ComingSoon({ title }) {
   return (
     <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", minHeight: 400, gap: 12 }}>
@@ -24,15 +26,16 @@ function ComingSoon({ title }) {
 
 // ── NAV ITEMS ─────────────────────────────────────────────
 const NAV_ITEMS = [
-  { id: "dashboard",    label: "Dashboard",           icon: "◈" },
-  { id: "therapists",   label: "Φυσιοθεραπευτές",    icon: "⊕" },
-  { id: "patients",     label: "Χρήστες / Ασθενείς", icon: "◉" },
-  { id: "requests",     label: "Αιτήματα",            icon: "◫" },
-  { id: "payments",     label: "Πληρωμές",            icon: "◈" },
-  { id: "reviews",      label: "Reviews",             icon: "◇" },
-  { id: "categories",   label: "Κατηγορίες",          icon: "⊞" },
-  { id: "reports",      label: "Αναφορές",            icon: "◰" },
-  { id: "settings",     label: "Ρυθμίσεις",           icon: "◎" },
+  { id: "dashboard",  label: "Dashboard",           icon: "◈" },
+  { id: "therapists", label: "Φυσιοθεραπευτές",    icon: "⊕" },
+  { id: "patients",   label: "Χρήστες / Ασθενείς", icon: "◉" },
+  { id: "requests",   label: "Αιτήματα",            icon: "◫" },
+  { id: "payments",   label: "Πληρωμές",            icon: "◈" },
+  { id: "reviews",    label: "Reviews",             icon: "◇" },
+  { id: "categories", label: "Κατηγορίες",          icon: "⊞" },
+  { id: "reports",    label: "Αναφορές",            icon: "◰" },
+  { id: "settings",   label: "Ρυθμίσεις",           icon: "⚙" },
+  { id: "blog",       label: "Blog",                icon: "✍" },
 ];
 
 // ── SIDEBAR ───────────────────────────────────────────────
@@ -97,21 +100,22 @@ function Sidebar({ activePage, onNavigate }) {
 export default function AdminLayout() {
   const [activePage, setActivePage] = useState("dashboard");
 
-  // Επέλεξε ποια σελίδα να δείξεις
   function renderPage() {
     switch (activePage) {
       case "dashboard":  return <AdminDashboard  onNavigate={setActivePage} />;
       case "therapists": return <TherapistsPage  onNavigate={setActivePage} />;
       case "patients":   return <PatientsPage />;
-      case "requests":    return <RequestsPage />;
-      case "payments":    return <PaymentsPage />;
-      case "reviews":     return <ReviewsPage />;
-     case "categories": return <CategoriesPage />;
-     case "reports": return <ReportsPage />;
-    case "settings": return <SettingsPage />;
-      default:           return <AdminDashboard  onNavigate={setActivePage} />;
+      case "requests":   return <RequestsPage />;
+      case "payments":   return <PaymentsPage />;
+      case "reviews":    return <ReviewsPage />;
+      case "categories": return <CategoriesPage />;
+      case "reports":    return <ReportsPage />;
+      case "settings":   return <SettingsPage />;
+      case "blog":       return <BlogPage />;
+      default:           return <AdminDashboard onNavigate={setActivePage} />;
     }
   }
+
   return (
     <div style={{ minHeight: "100vh", background: "#F8FAFC", fontFamily: "'DM Sans', sans-serif", display: "flex" }}>
       <style>{`@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=DM+Serif+Display&display=swap');`}</style>
