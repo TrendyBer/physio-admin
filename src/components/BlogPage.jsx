@@ -1,47 +1,6 @@
 "use client";
-import { useState } from "react";
-
-const MOCK_ARTICLES = [
-  {
-    id: 1,
-    title: "How home physiotherapy can help with back and neck pain",
-    titleEl: "Πώς η φυσιοθεραπεία στο σπίτι βοηθά στον πόνο στη μέση και τον αυχένα",
-    category: "Pain Management",
-    status: "published",
-    date: "2026-03-15",
-    reads: 342,
-    clicks: 89,
-    avgTime: "4:32",
-    sources: { direct: 58, search: 42 },
-    monthlyReads: [12, 28, 45, 67, 89, 101],
-  },
-  {
-    id: 2,
-    title: "Simple ways to improve mobility and balance at home",
-    titleEl: "Απλοί τρόποι για να βελτιώσετε την κινητικότητα και ισορροπία στο σπίτι",
-    category: "Mobility & Balance",
-    status: "published",
-    date: "2026-03-10",
-    reads: 218,
-    clicks: 54,
-    avgTime: "3:15",
-    sources: { direct: 71, search: 29 },
-    monthlyReads: [8, 19, 31, 44, 62, 54],
-  },
-  {
-    id: 3,
-    title: "What to expect from home physiotherapy after surgery",
-    titleEl: "Τι να περιμένετε από τη φυσιοθεραπεία στο σπίτι μετά το χειρουργείο",
-    category: "Post-Surgery",
-    status: "draft",
-    date: "2026-03-28",
-    reads: 0,
-    clicks: 0,
-    avgTime: "0:00",
-    sources: { direct: 0, search: 0 },
-    monthlyReads: [0, 0, 0, 0, 0, 0],
-  },
-];
+import { useState, useEffect } from "react";
+import { supabase } from "../lib/supabase";
 
 const CATEGORIES = ["Pain Management", "Recovery Tips", "Post-Surgery", "Home Physiotherapy", "Mobility & Balance", "Sports Injuries"];
 const MONTHS = ["Νοε", "Δεκ", "Ιαν", "Φεβ", "Μαρ", "Απρ"];
@@ -53,51 +12,110 @@ const colors = {
 };
 
 export default function BlogPage() {
-  const [view, setView] = useState("list"); // list | edit | new | analytics
-  const [articles, setArticles] = useState(MOCK_ARTICLES);
+  const [view, setView] = useState("list");
+  const [articles, setArticles] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
   const [selected, setSelected] = useState(null);
   const [filter, setFilter] = useState("all");
-  const [form, setForm] = useState({ title: "", titleEl: "", category: CATEGORIES[0], status: "draft", content: "", contentEl: "" });
+  const [form, setForm] = useState({
+    title_en: "", title_el: "", excerpt_en: "", excerpt_el: "",
+    category: CATEGORIES[0], status: "draft",
+    content_en: "", content_el: "", slug: "", image_url: ""
+  });
+
+  // Fetch articles from Supabase
+  useEffect(() => {
+    fetchArticles();
+  }, []);
+
+  async function fetchArticles() {
+    setLoading(true);
+    const { data, error } = await supabase
+      .from("articles")
+      .select("*")
+      .order("created_at", { ascending: false });
+    if (!error && data) setArticles(data);
+    setLoading(false);
+  }
 
   const filtered = filter === "all" ? articles : articles.filter(a => a.status === filter);
 
+  function generateSlug(title) {
+    return title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
+  }
+
   function openEdit(article) {
     setSelected(article);
-    setForm({ title: article.title, titleEl: article.titleEl, category: article.category, status: article.status, content: "", contentEl: "" });
+    setForm({
+      title_en: article.title_en || "",
+      title_el: article.title_el || "",
+      excerpt_en: article.excerpt_en || "",
+      excerpt_el: article.excerpt_el || "",
+      category: article.category || CATEGORIES[0],
+      status: article.status || "draft",
+      content_en: article.content_en || "",
+      content_el: article.content_el || "",
+      slug: article.slug || "",
+      image_url: article.image_url || "",
+    });
     setView("edit");
   }
 
   function openNew() {
     setSelected(null);
-    setForm({ title: "", titleEl: "", category: CATEGORIES[0], status: "draft", content: "", contentEl: "" });
+    setForm({
+      title_en: "", title_el: "", excerpt_en: "", excerpt_el: "",
+      category: CATEGORIES[0], status: "draft",
+      content_en: "", content_el: "", slug: "", image_url: ""
+    });
     setView("new");
   }
 
-  function saveArticle() {
+  async function saveArticle() {
+    if (!form.title_en) return alert("Παρακαλώ συμπλήρωσε τον τίτλο στα αγγλικά!");
+    setSaving(true);
+
+    const slug = form.slug || generateSlug(form.title_en);
+    const payload = { ...form, slug };
+
+    let error;
     if (view === "new") {
-      const newArticle = {
-        id: Date.now(), ...form,
-        date: new Date().toISOString().split("T")[0],
-        reads: 0, clicks: 0, avgTime: "0:00",
-        sources: { direct: 0, search: 0 },
-        monthlyReads: [0, 0, 0, 0, 0, 0],
-      };
-      setArticles([...articles, newArticle]);
+      ({ error } = await supabase.from("articles").insert([payload]));
     } else {
-      setArticles(articles.map(a => a.id === selected.id ? { ...a, ...form } : a));
+      ({ error } = await supabase.from("articles").update(payload).eq("id", selected.id));
     }
-    setView("list");
+
+    if (error) {
+      alert("Σφάλμα αποθήκευσης: " + error.message);
+    } else {
+      await fetchArticles();
+      setView("list");
+    }
+    setSaving(false);
   }
 
-  function deleteArticle(id) {
-    if (confirm("Είστε σίγουροι ότι θέλετε να διαγράψετε αυτό το άρθρο;")) {
-      setArticles(articles.filter(a => a.id !== id));
-    }
+  async function deleteArticle(id) {
+    if (!confirm("Είστε σίγουροι ότι θέλετε να διαγράψετε αυτό το άρθρο;")) return;
+    const { error } = await supabase.from("articles").delete().eq("id", id);
+    if (!error) await fetchArticles();
   }
 
-  const totalReads = articles.reduce((s, a) => s + a.reads, 0);
-  const totalClicks = articles.reduce((s, a) => s + a.clicks, 0);
+  async function toggleStatus(article) {
+    const newStatus = article.status === "published" ? "draft" : "published";
+    const { error } = await supabase.from("articles").update({ status: newStatus }).eq("id", article.id);
+    if (!error) await fetchArticles();
+  }
+
+  const totalReads = articles.reduce((s, a) => s + (a.reads || 0), 0);
   const published = articles.filter(a => a.status === "published").length;
+
+  // ===== LOADING =====
+  if (loading) return (
+    <div style={{ padding: 24, display: "flex", alignItems: "center", justifyContent: "center", minHeight: 400 }}>
+      <div style={{ fontSize: 16, color: colors.gray }}>Φόρτωση άρθρων...</div>
+    </div>
+  );
 
   // ===== LIST VIEW =====
   if (view === "list") return (
@@ -119,7 +137,7 @@ export default function BlogPage() {
           { label: "Συνολικά Άρθρα", value: articles.length, color: colors.blue },
           { label: "Δημοσιευμένα", value: published, color: colors.green },
           { label: "Συνολικές Αναγνώσεις", value: totalReads.toLocaleString(), color: colors.navy },
-          { label: "Συνολικά Κλικ", value: totalClicks.toLocaleString(), color: colors.yellow },
+          { label: "Πρόχειρα", value: articles.length - published, color: colors.yellow },
         ].map(s => (
           <div key={s.label} style={{ background: "#fff", border: `1px solid ${colors.border}`, borderRadius: 12, padding: 20 }}>
             <div style={{ fontSize: 28, fontWeight: 700, color: s.color }}>{s.value}</div>
@@ -139,68 +157,89 @@ export default function BlogPage() {
 
       {/* Articles Table */}
       <div style={{ background: "#fff", border: `1px solid ${colors.border}`, borderRadius: 12, overflow: "hidden" }}>
-        <table style={{ width: "100%", borderCollapse: "collapse" }}>
-          <thead>
-            <tr style={{ background: colors.bg }}>
-              {["Τίτλος", "Κατηγορία", "Κατάσταση", "Αναγνώσεις", "Κλικ", "Μέσος Χρόνος", "Ενέργειες"].map(h => (
-                <th key={h} style={{ padding: "12px 16px", textAlign: "left", fontSize: 12, fontWeight: 600, color: colors.gray, textTransform: "uppercase", letterSpacing: ".05em" }}>{h}</th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {filtered.map((article, i) => (
-              <tr key={article.id} style={{ borderTop: `1px solid ${colors.border}`, background: i % 2 === 0 ? "#fff" : colors.bg }}>
-                <td style={{ padding: "14px 16px" }}>
-                  <div style={{ fontSize: 14, fontWeight: 600, color: colors.navy, maxWidth: 280 }}>{article.title}</div>
-                  <div style={{ fontSize: 12, color: colors.gray, marginTop: 2 }}>{article.date}</div>
-                </td>
-                <td style={{ padding: "14px 16px" }}>
-                  <span style={{ background: colors.lightBlue, color: colors.blue, padding: "3px 10px", borderRadius: 20, fontSize: 12, fontWeight: 500 }}>{article.category}</span>
-                </td>
-                <td style={{ padding: "14px 16px" }}>
-                  <span style={{ background: article.status === "published" ? "#D1FAE5" : "#FEF3C7", color: article.status === "published" ? colors.green : colors.yellow, padding: "3px 10px", borderRadius: 20, fontSize: 12, fontWeight: 600 }}>
-                    {article.status === "published" ? "✓ Δημοσιευμένο" : "✎ Πρόχειρο"}
-                  </span>
-                </td>
-                <td style={{ padding: "14px 16px", fontSize: 14, color: colors.navy, fontWeight: 600 }}>{article.reads.toLocaleString()}</td>
-                <td style={{ padding: "14px 16px", fontSize: 14, color: colors.navy, fontWeight: 600 }}>{article.clicks.toLocaleString()}</td>
-                <td style={{ padding: "14px 16px", fontSize: 14, color: colors.navy }}>{article.avgTime}</td>
-                <td style={{ padding: "14px 16px" }}>
-                  <div style={{ display: "flex", gap: 8 }}>
-                    <button onClick={() => { setSelected(article); setView("analytics"); }} style={{ padding: "5px 12px", borderRadius: 6, border: `1px solid ${colors.border}`, background: "#fff", fontSize: 12, cursor: "pointer", color: colors.blue, fontWeight: 500 }}>📊 Analytics</button>
-                    <button onClick={() => openEdit(article)} style={{ padding: "5px 12px", borderRadius: 6, border: `1px solid ${colors.border}`, background: "#fff", fontSize: 12, cursor: "pointer", color: colors.navy, fontWeight: 500 }}>✎ Επεξεργασία</button>
-                    <button onClick={() => deleteArticle(article.id)} style={{ padding: "5px 12px", borderRadius: 6, border: `1px solid #FEE2E2`, background: "#FEF2F2", fontSize: 12, cursor: "pointer", color: colors.red, fontWeight: 500 }}>🗑 Διαγραφή</button>
-                  </div>
-                </td>
+        {filtered.length === 0 ? (
+          <div style={{ padding: 40, textAlign: "center", color: colors.gray }}>
+            Δεν υπάρχουν άρθρα ακόμα. Πάτα "+ Νέο Άρθρο" για να ξεκινήσεις!
+          </div>
+        ) : (
+          <table style={{ width: "100%", borderCollapse: "collapse" }}>
+            <thead>
+              <tr style={{ background: colors.bg }}>
+                {["Τίτλος", "Κατηγορία", "Κατάσταση", "Αναγνώσεις", "Ημερομηνία", "Ενέργειες"].map(h => (
+                  <th key={h} style={{ padding: "12px 16px", textAlign: "left", fontSize: 12, fontWeight: 600, color: colors.gray, textTransform: "uppercase", letterSpacing: ".05em" }}>{h}</th>
+                ))}
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {filtered.map((article, i) => (
+                <tr key={article.id} style={{ borderTop: `1px solid ${colors.border}`, background: i % 2 === 0 ? "#fff" : colors.bg }}>
+                  <td style={{ padding: "14px 16px" }}>
+                    <div style={{ fontSize: 14, fontWeight: 600, color: colors.navy, maxWidth: 280 }}>{article.title_en}</div>
+                    <div style={{ fontSize: 12, color: colors.gray, marginTop: 2 }}>{article.title_el}</div>
+                  </td>
+                  <td style={{ padding: "14px 16px" }}>
+                    <span style={{ background: colors.lightBlue, color: colors.blue, padding: "3px 10px", borderRadius: 20, fontSize: 12, fontWeight: 500 }}>{article.category}</span>
+                  </td>
+                  <td style={{ padding: "14px 16px" }}>
+                    <button onClick={() => toggleStatus(article)} style={{ background: article.status === "published" ? "#D1FAE5" : "#FEF3C7", color: article.status === "published" ? colors.green : colors.yellow, padding: "3px 10px", borderRadius: 20, fontSize: 12, fontWeight: 600, border: "none", cursor: "pointer" }}>
+                      {article.status === "published" ? "✓ Δημοσιευμένο" : "✎ Πρόχειρο"}
+                    </button>
+                  </td>
+                  <td style={{ padding: "14px 16px", fontSize: 14, color: colors.navy, fontWeight: 600 }}>{article.reads || 0}</td>
+                  <td style={{ padding: "14px 16px", fontSize: 13, color: colors.gray }}>
+                    {new Date(article.created_at).toLocaleDateString("el-GR")}
+                  </td>
+                  <td style={{ padding: "14px 16px" }}>
+                    <div style={{ display: "flex", gap: 8 }}>
+                      <button onClick={() => openEdit(article)} style={{ padding: "5px 12px", borderRadius: 6, border: `1px solid ${colors.border}`, background: "#fff", fontSize: 12, cursor: "pointer", color: colors.navy, fontWeight: 500 }}>✎ Επεξεργασία</button>
+                      <button onClick={() => deleteArticle(article.id)} style={{ padding: "5px 12px", borderRadius: 6, border: `1px solid #FEE2E2`, background: "#FEF2F2", fontSize: 12, cursor: "pointer", color: colors.red, fontWeight: 500 }}>🗑 Διαγραφή</button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
       </div>
     </div>
   );
 
   // ===== EDIT / NEW VIEW =====
   if (view === "edit" || view === "new") return (
-    <div style={{ padding: 24, maxWidth: 800 }}>
+    <div style={{ padding: 24, maxWidth: 860 }}>
       <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 24 }}>
         <button onClick={() => setView("list")} style={{ background: "none", border: "none", fontSize: 20, cursor: "pointer", color: colors.gray }}>←</button>
         <h1 style={{ fontSize: 22, fontWeight: 700, color: colors.navy }}>{view === "new" ? "Νέο Άρθρο" : "Επεξεργασία Άρθρου"}</h1>
       </div>
 
       <div style={{ background: "#fff", border: `1px solid ${colors.border}`, borderRadius: 12, padding: 24, display: "flex", flexDirection: "column", gap: 20 }}>
-        {/* Title EN */}
-        <div>
-          <label style={{ fontSize: 13, fontWeight: 600, color: colors.navy, display: "block", marginBottom: 6 }}>Τίτλος (Αγγλικά)</label>
-          <input value={form.title} onChange={e => setForm({ ...form, title: e.target.value })} style={{ width: "100%", padding: "10px 14px", border: `1px solid ${colors.border}`, borderRadius: 8, fontSize: 14, fontFamily: "inherit", boxSizing: "border-box" }} />
-        </div>
-        {/* Title EL */}
-        <div>
-          <label style={{ fontSize: 13, fontWeight: 600, color: colors.navy, display: "block", marginBottom: 6 }}>Τίτλος (Ελληνικά)</label>
-          <input value={form.titleEl} onChange={e => setForm({ ...form, titleEl: e.target.value })} style={{ width: "100%", padding: "10px 14px", border: `1px solid ${colors.border}`, borderRadius: 8, fontSize: 14, fontFamily: "inherit", boxSizing: "border-box" }} />
-        </div>
-        {/* Category & Status */}
+
+        {/* Titles */}
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+          <div>
+            <label style={{ fontSize: 13, fontWeight: 600, color: colors.navy, display: "block", marginBottom: 6 }}>Τίτλος (Αγγλικά) *</label>
+            <input value={form.title_en} onChange={e => setForm({ ...form, title_en: e.target.value, slug: generateSlug(e.target.value) })} style={{ width: "100%", padding: "10px 14px", border: `1px solid ${colors.border}`, borderRadius: 8, fontSize: 14, fontFamily: "inherit", boxSizing: "border-box" }} placeholder="Title in English" />
+          </div>
+          <div>
+            <label style={{ fontSize: 13, fontWeight: 600, color: colors.navy, display: "block", marginBottom: 6 }}>Τίτλος (Ελληνικά)</label>
+            <input value={form.title_el} onChange={e => setForm({ ...form, title_el: e.target.value })} style={{ width: "100%", padding: "10px 14px", border: `1px solid ${colors.border}`, borderRadius: 8, fontSize: 14, fontFamily: "inherit", boxSizing: "border-box" }} placeholder="Τίτλος στα Ελληνικά" />
+          </div>
+        </div>
+
+        {/* Excerpts */}
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+          <div>
+            <label style={{ fontSize: 13, fontWeight: 600, color: colors.navy, display: "block", marginBottom: 6 }}>Περίληψη (Αγγλικά)</label>
+            <textarea value={form.excerpt_en} onChange={e => setForm({ ...form, excerpt_en: e.target.value })} rows={3} style={{ width: "100%", padding: "10px 14px", border: `1px solid ${colors.border}`, borderRadius: 8, fontSize: 14, fontFamily: "inherit", resize: "vertical", boxSizing: "border-box" }} placeholder="Short description in English..." />
+          </div>
+          <div>
+            <label style={{ fontSize: 13, fontWeight: 600, color: colors.navy, display: "block", marginBottom: 6 }}>Περίληψη (Ελληνικά)</label>
+            <textarea value={form.excerpt_el} onChange={e => setForm({ ...form, excerpt_el: e.target.value })} rows={3} style={{ width: "100%", padding: "10px 14px", border: `1px solid ${colors.border}`, borderRadius: 8, fontSize: 14, fontFamily: "inherit", resize: "vertical", boxSizing: "border-box" }} placeholder="Σύντομη περιγραφή στα ελληνικά..." />
+          </div>
+        </div>
+
+        {/* Category, Status, Slug */}
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 16 }}>
           <div>
             <label style={{ fontSize: 13, fontWeight: 600, color: colors.navy, display: "block", marginBottom: 6 }}>Κατηγορία</label>
             <select value={form.category} onChange={e => setForm({ ...form, category: e.target.value })} style={{ width: "100%", padding: "10px 14px", border: `1px solid ${colors.border}`, borderRadius: 8, fontSize: 14, fontFamily: "inherit" }}>
@@ -214,98 +253,36 @@ export default function BlogPage() {
               <option value="published">Δημοσιευμένο</option>
             </select>
           </div>
+          <div>
+            <label style={{ fontSize: 13, fontWeight: 600, color: colors.navy, display: "block", marginBottom: 6 }}>Slug (URL)</label>
+            <input value={form.slug} onChange={e => setForm({ ...form, slug: e.target.value })} style={{ width: "100%", padding: "10px 14px", border: `1px solid ${colors.border}`, borderRadius: 8, fontSize: 14, fontFamily: "inherit", boxSizing: "border-box" }} placeholder="auto-generated-from-title" />
+          </div>
         </div>
+
+        {/* Image URL */}
+        <div>
+          <label style={{ fontSize: 13, fontWeight: 600, color: colors.navy, display: "block", marginBottom: 6 }}>URL Εικόνας (προαιρετικό)</label>
+          <input value={form.image_url} onChange={e => setForm({ ...form, image_url: e.target.value })} style={{ width: "100%", padding: "10px 14px", border: `1px solid ${colors.border}`, borderRadius: 8, fontSize: 14, fontFamily: "inherit", boxSizing: "border-box" }} placeholder="https://..." />
+        </div>
+
         {/* Content EN */}
         <div>
           <label style={{ fontSize: 13, fontWeight: 600, color: colors.navy, display: "block", marginBottom: 6 }}>Περιεχόμενο (Αγγλικά)</label>
-          <textarea value={form.content} onChange={e => setForm({ ...form, content: e.target.value })} rows={8} style={{ width: "100%", padding: "10px 14px", border: `1px solid ${colors.border}`, borderRadius: 8, fontSize: 14, fontFamily: "inherit", resize: "vertical", boxSizing: "border-box" }} />
+          <textarea value={form.content_en} onChange={e => setForm({ ...form, content_en: e.target.value })} rows={10} style={{ width: "100%", padding: "10px 14px", border: `1px solid ${colors.border}`, borderRadius: 8, fontSize: 14, fontFamily: "inherit", resize: "vertical", boxSizing: "border-box" }} placeholder="Write the article content in English..." />
         </div>
+
         {/* Content EL */}
         <div>
           <label style={{ fontSize: 13, fontWeight: 600, color: colors.navy, display: "block", marginBottom: 6 }}>Περιεχόμενο (Ελληνικά)</label>
-          <textarea value={form.contentEl} onChange={e => setForm({ ...form, contentEl: e.target.value })} rows={8} style={{ width: "100%", padding: "10px 14px", border: `1px solid ${colors.border}`, borderRadius: 8, fontSize: 14, fontFamily: "inherit", resize: "vertical", boxSizing: "border-box" }} />
+          <textarea value={form.content_el} onChange={e => setForm({ ...form, content_el: e.target.value })} rows={10} style={{ width: "100%", padding: "10px 14px", border: `1px solid ${colors.border}`, borderRadius: 8, fontSize: 14, fontFamily: "inherit", resize: "vertical", boxSizing: "border-box" }} placeholder="Γράψε το περιεχόμενο του άρθρου στα ελληνικά..." />
         </div>
+
         {/* Buttons */}
         <div style={{ display: "flex", gap: 12, justifyContent: "flex-end" }}>
           <button onClick={() => setView("list")} style={{ padding: "10px 24px", borderRadius: 8, border: `1px solid ${colors.border}`, background: "#fff", fontSize: 14, cursor: "pointer", color: colors.gray }}>Ακύρωση</button>
-          <button onClick={saveArticle} style={{ padding: "10px 24px", borderRadius: 8, border: "none", background: colors.blue, color: "#fff", fontSize: 14, fontWeight: 600, cursor: "pointer" }}>
-            {form.status === "published" ? "✓ Δημοσίευση" : "💾 Αποθήκευση"}
+          <button onClick={saveArticle} disabled={saving} style={{ padding: "10px 24px", borderRadius: 8, border: "none", background: saving ? colors.gray : colors.blue, color: "#fff", fontSize: 14, fontWeight: 600, cursor: saving ? "not-allowed" : "pointer" }}>
+            {saving ? "Αποθήκευση..." : form.status === "published" ? "✓ Δημοσίευση" : "💾 Αποθήκευση"}
           </button>
-        </div>
-      </div>
-    </div>
-  );
-
-  // ===== ANALYTICS VIEW =====
-  if (view === "analytics" && selected) return (
-    <div style={{ padding: 24 }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 24 }}>
-        <button onClick={() => setView("list")} style={{ background: "none", border: "none", fontSize: 20, cursor: "pointer", color: colors.gray }}>←</button>
-        <div>
-          <h1 style={{ fontSize: 20, fontWeight: 700, color: colors.navy }}>Analytics Άρθρου</h1>
-          <p style={{ fontSize: 13, color: colors.gray, marginTop: 2 }}>{selected.title}</p>
-        </div>
-      </div>
-
-      {/* KPIs */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 16, marginBottom: 24 }}>
-        {[
-          { label: "Συνολικές Αναγνώσεις", value: selected.reads, icon: "👁", color: colors.blue },
-          { label: "Κλικ", value: selected.clicks, icon: "🖱", color: colors.green },
-          { label: "Μέσος Χρόνος Ανάγνωσης", value: selected.avgTime, icon: "⏱", color: colors.navy },
-          { label: "Conversion (κλικ/αναγνώσεις)", value: selected.reads ? `${Math.round((selected.clicks / selected.reads) * 100)}%` : "0%", icon: "📈", color: colors.yellow },
-        ].map(k => (
-          <div key={k.label} style={{ background: "#fff", border: `1px solid ${colors.border}`, borderRadius: 12, padding: 20 }}>
-            <div style={{ fontSize: 24, marginBottom: 8 }}>{k.icon}</div>
-            <div style={{ fontSize: 26, fontWeight: 700, color: k.color }}>{k.value}</div>
-            <div style={{ fontSize: 12, color: colors.gray, marginTop: 4 }}>{k.label}</div>
-          </div>
-        ))}
-      </div>
-
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
-        {/* Monthly Reads Chart */}
-        <div style={{ background: "#fff", border: `1px solid ${colors.border}`, borderRadius: 12, padding: 24 }}>
-          <h3 style={{ fontSize: 16, fontWeight: 600, color: colors.navy, marginBottom: 20 }}>Αναγνώσεις ανά Μήνα</h3>
-          <div style={{ display: "flex", alignItems: "flex-end", gap: 12, height: 140 }}>
-            {selected.monthlyReads.map((v, i) => {
-              const max = Math.max(...selected.monthlyReads) || 1;
-              const h = Math.round((v / max) * 120);
-              return (
-                <div key={i} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 6 }}>
-                  <span style={{ fontSize: 11, color: colors.gray }}>{v}</span>
-                  <div style={{ width: "100%", height: h, background: i === selected.monthlyReads.length - 1 ? colors.blue : "#BFDBFE", borderRadius: "4px 4px 0 0" }} />
-                  <span style={{ fontSize: 11, color: colors.gray }}>{MONTHS[i]}</span>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-
-        {/* Source Breakdown */}
-        <div style={{ background: "#fff", border: `1px solid ${colors.border}`, borderRadius: 12, padding: 24 }}>
-          <h3 style={{ fontSize: 16, fontWeight: 600, color: colors.navy, marginBottom: 20 }}>Πηγή Επισκεπτών</h3>
-          <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-            {[
-              { label: "🔍 Από Αναζήτηση (Google κλπ)", value: selected.sources.search, color: colors.blue },
-              { label: "🌐 Direct (μπήκε απευθείας)", value: selected.sources.direct, color: colors.green },
-            ].map(s => (
-              <div key={s.label}>
-                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
-                  <span style={{ fontSize: 13, color: colors.gray }}>{s.label}</span>
-                  <span style={{ fontSize: 13, fontWeight: 600, color: colors.navy }}>{s.value}%</span>
-                </div>
-                <div style={{ height: 8, background: colors.border, borderRadius: 4, overflow: "hidden" }}>
-                  <div style={{ height: "100%", width: `${s.value}%`, background: s.color, borderRadius: 4 }} />
-                </div>
-              </div>
-            ))}
-          </div>
-          <div style={{ marginTop: 24, padding: 16, background: colors.bg, borderRadius: 8 }}>
-            <p style={{ fontSize: 13, color: colors.gray, lineHeight: 1.6 }}>
-              <strong style={{ color: colors.navy }}>Ερμηνεία:</strong> Το {selected.sources.search}% των επισκεπτών βρήκε το άρθρο μέσω αναζήτησης, ενώ το {selected.sources.direct}% ήρθε απευθείας από την ιστοσελίδα.
-            </p>
-          </div>
         </div>
       </div>
     </div>
