@@ -1,47 +1,22 @@
 "use client";
 import { useState, useEffect } from "react";
-
-const THERAPISTS_LIST = [
-  { id:1, name:"Νίκος Γεωργίου",    specialty:"Νευρολογική" },
-  { id:2, name:"Ελένη Κωστοπούλου", specialty:"Αθλητική" },
-  { id:3, name:"Μαρία Παπαδοπούλου",specialty:"Ορθοπαιδική" },
-  { id:4, name:"Δημήτρης Αλεξίου",  specialty:"Παιδιατρική" },
-];
-
-const MOCK_REQUESTS = [
-  { id:1,  name:"Γιώργος Μπέης",      phone:"697-123-4567", email:"g.beis@gmail.com",      area:"Αθήνα",        source:"Google",    description:"Πόνος στη μέση μετά από ατύχημα.", status:"active",    assignedTo:"Νίκος Γεωργίου",    freeAssessment:true,  submittedAt:"2025-03-10", preferredTherapist: null },
-  { id:2,  name:"Ελένη Σταύρου",      phone:"693-234-5678", email:"eleni.s@hotmail.com",   area:"Γλυφάδα",      source:"Instagram", description:"Αποκατάσταση μετά από εγχείρηση γόνατος.", status:"active",    assignedTo:"Νίκος Γεωργίου",    freeAssessment:true,  submittedAt:"2025-03-15", preferredTherapist: null },
-  { id:3,  name:"Μάριος Αντωνίου",    phone:"699-567-8901", email:"m.antoniou@gmail.com",  area:"Πάτρα",        source:"Google",    description:"Αθλητικός τραυματισμός στον αστράγαλο.", status:"active",    assignedTo:"Ελένη Κωστοπούλου", freeAssessment:true,  submittedAt:"2025-03-20", preferredTherapist: null },
-  { id:4,  name:"Σοφία Δημητρίου",    phone:"695-678-9012", email:"sofia.d@hotmail.com",   area:"Πάτρα",        source:"Instagram", description:"Χρόνιος πόνος στον ώμο.", status:"pending",   assignedTo:null,                freeAssessment:false, submittedAt:"2025-03-22", preferredTherapist: null },
-  { id:5,  name:"Μαρία Θεοδώρου",     phone:"694-321-9870", email:"mtheo@gmail.com",       area:"Μαρούσι",      source:"Facebook",  description:"Φυσικοθεραπεία για αθλητικό τραυματισμό.", status:"pending",   assignedTo:null,                freeAssessment:false, submittedAt:"2025-03-30", preferredTherapist: null },
-  { id:6,  name:"Άννα Στεφανίδη",     phone:"693-987-6543", email:"anna.s@hotmail.com",    area:"Γλυφάδα",      source:"Instagram", description:"Αποκατάσταση μετά από εγχείρηση γόνατος.", status:"pending",   assignedTo:null,                freeAssessment:false, submittedAt:"2025-03-31", preferredTherapist: null },
-  { id:7,  name:"Κώστας Λεβέντης",    phone:"699-555-1234", email:"k.leventis@yahoo.com",  area:"Πειραιάς",     source:"Φίλος",     description:"Αυχενικό σύνδρομο εδώ και 3 χρόνια.", status:"pending",   assignedTo:null,                freeAssessment:false, submittedAt:"2025-03-30", preferredTherapist: null },
-  { id:8,  name:"Κώστας Παπαδάκης",   phone:"698-345-6789", email:"k.papadakis@yahoo.com", area:"Πειραιάς",     source:"Φίλος",     description:"Αυχενικό σύνδρομο. Μούδιασμα στα χέρια.", status:"completed", assignedTo:"Νίκος Γεωργίου",    freeAssessment:true,  submittedAt:"2025-02-20", preferredTherapist: null },
-  { id:9,  name:"Άννα Μιχαλοπούλου",  phone:"694-456-7890", email:"anna.m@gmail.com",      area:"Μαρούσι",      source:"Facebook",  description:"Μυοσκελετικό πρόβλημα στον αριστερό ώμο.", status:"completed", assignedTo:"Νίκος Γεωργίου",    freeAssessment:true,  submittedAt:"2025-01-05", preferredTherapist: null },
-  { id:10, name:"Νίκος Θεοδώρου",     phone:"696-789-0123", email:"n.theodorou@yahoo.com", area:"Αθήνα",        source:"Φίλος",     description:"COPD και δυσκολία στην αναπνοή.", status:"completed", assignedTo:"Σοφία Νικολάου",    freeAssessment:true,  submittedAt:"2025-02-01", preferredTherapist: null },
-];
+import { supabase } from "../lib/supabase";
 
 const STATUS_MAP = {
   pending:   { label:"Εκκρεμές",    bg:"#FEF3C7", color:"#92400E" },
   active:    { label:"Ενεργό",      bg:"#DBEAFE", color:"#1E40AF" },
   completed: { label:"Ολοκλ/θηκε", bg:"#D1FAE5", color:"#065F46" },
 };
-const SOURCE_COLORS = {
-  "Google":    { bg:"#EFF6FF", color:"#1D4ED8" },
-  "Instagram": { bg:"#FAF5FF", color:"#7E22CE" },
-  "Facebook":  { bg:"#EFF6FF", color:"#1D4ED8" },
-  "Φίλος":     { bg:"#F0FDF4", color:"#15803D" },
-};
 
 function Badge({ label, bg, color }) {
   return <span style={{ background:bg, color, padding:"2px 10px", borderRadius:999, fontSize:11, fontWeight:700, letterSpacing:"0.04em", textTransform:"uppercase", whiteSpace:"nowrap" }}>{label}</span>;
 }
 function Avatar({ name, size=40 }) {
-  return <div style={{ width:size, height:size, borderRadius:"50%", background:"#FFF7ED", color:"#C2410C", display:"flex", alignItems:"center", justifyContent:"center", fontSize:size*0.33, fontWeight:700, flexShrink:0 }}>{name.split(" ").map(n=>n[0]).join("").slice(0,2).toUpperCase()}</div>;
+  return <div style={{ width:size, height:size, borderRadius:"50%", background:"#FFF7ED", color:"#C2410C", display:"flex", alignItems:"center", justifyContent:"center", fontSize:size*0.33, fontWeight:700, flexShrink:0 }}>{(name||"?").split(" ").map(n=>n[0]).join("").slice(0,2).toUpperCase()}</div>;
 }
 
-function AssignModal({ request, onClose, onAssign }) {
-  const [selected, setSelected] = useState(request.assignedTo || request.preferredTherapist || "");
+function AssignModal({ request, therapists, onClose, onAssign }) {
+  const [selected, setSelected] = useState(request.assigned_to || request.preferred_therapist || "");
   return (
     <div style={{ position:"fixed", inset:0, background:"rgba(15,23,42,0.5)", display:"flex", alignItems:"center", justifyContent:"center", zIndex:1000, padding:24 }}
       onClick={e=>{ if(e.target===e.currentTarget) onClose(); }}>
@@ -51,13 +26,13 @@ function AssignModal({ request, onClose, onAssign }) {
           <div style={{ flex:1 }}>
             <div style={{ display:"flex", alignItems:"center", gap:8, flexWrap:"wrap" }}>
               <h2 style={{ fontSize:18, fontWeight:700, color:"#0F172A", margin:0 }}>{request.name}</h2>
-              {request.preferredTherapist && (
+              {request.preferred_therapist && (
                 <span style={{ background:"#FEF3C7", color:"#92400E", padding:"2px 10px", borderRadius:999, fontSize:11, fontWeight:700 }}>
-                  ⭐ Προτίμηση: {request.preferredTherapist}
+                  ⭐ Προτίμηση: {request.preferred_therapist}
                 </span>
               )}
             </div>
-            <div style={{ fontSize:13, color:"#64748B", marginTop:3 }}>{request.phone} · {request.email} · {request.area}</div>
+            <div style={{ fontSize:13, color:"#64748B", marginTop:3 }}>{request.phone} · {request.email} · {request.city}</div>
           </div>
           <button onClick={onClose} style={{ background:"none", border:"none", fontSize:20, cursor:"pointer", color:"#94A3B8" }}>✕</button>
         </div>
@@ -65,26 +40,21 @@ function AssignModal({ request, onClose, onAssign }) {
           <div>
             <div style={{ fontSize:12, fontWeight:700, color:"#94A3B8", textTransform:"uppercase", letterSpacing:"0.06em", marginBottom:8 }}>Πρόβλημα Ασθενή</div>
             <p style={{ fontSize:14, color:"#475569", lineHeight:1.6, margin:0, background:"#FFF7ED", padding:"12px 14px", borderRadius:8, borderLeft:"3px solid #F59E0B" }}>
-              {request.description}
+              {request.service}{request.description ? ` - ${request.description}` : ''}
             </p>
-          </div>
-          <div style={{ display:"flex", gap:10, flexWrap:"wrap" }}>
-            {(() => { const s = SOURCE_COLORS[request.source]||{bg:"#F3F4F6",color:"#374151"}; return <Badge label={`Πηγή: ${request.source}`} bg={s.bg} color={s.color}/>; })()}
-            <Badge label={`Ημ/νία: ${request.submittedAt}`} bg="#F8FAFC" color="#475569"/>
-            <Badge label={request.freeAssessment ? "✓ Αξιολόγηση" : "! Χωρίς αξιολόγηση"} bg={request.freeAssessment?"#D1FAE5":"#FEF3C7"} color={request.freeAssessment?"#065F46":"#92400E"}/>
           </div>
           <div>
             <div style={{ fontSize:12, fontWeight:700, color:"#94A3B8", textTransform:"uppercase", letterSpacing:"0.06em", marginBottom:10 }}>Ανάθεση Θεραπευτή</div>
             <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
-              {THERAPISTS_LIST.map(t => (
-                <div key={t.id} onClick={()=>setSelected(t.name)} style={{ display:"flex", alignItems:"center", gap:12, padding:"12px 16px", borderRadius:10, border:`2px solid ${selected===t.name?"#1D4ED8":"#E2E8F0"}`, background:selected===t.name?"#EFF6FF":"#fff", cursor:"pointer", transition:"all 0.15s" }}>
+              {therapists.map(t => (
+                <div key={t.id} onClick={()=>setSelected(t.name)} style={{ display:"flex", alignItems:"center", gap:12, padding:"12px 16px", borderRadius:10, border:`2px solid ${selected===t.name?"#1D4ED8":"#E2E8F0"}`, background:selected===t.name?"#EFF6FF":"#fff", cursor:"pointer" }}>
                   <div style={{ width:36, height:36, borderRadius:"50%", background:"#EFF6FF", color:"#1D4ED8", display:"flex", alignItems:"center", justifyContent:"center", fontSize:12, fontWeight:700 }}>
                     {t.name.split(" ").map(n=>n[0]).join("").slice(0,2)}
                   </div>
                   <div style={{ flex:1 }}>
                     <div style={{ fontWeight:600, fontSize:14, color:"#0F172A", display:"flex", alignItems:"center", gap:8 }}>
                       {t.name}
-                      {request.preferredTherapist === t.name && (
+                      {request.preferred_therapist === t.name && (
                         <span style={{ background:"#FEF3C7", color:"#92400E", padding:"1px 8px", borderRadius:999, fontSize:10, fontWeight:700 }}>⭐ Προτίμηση</span>
                       )}
                     </div>
@@ -98,7 +68,7 @@ function AssignModal({ request, onClose, onAssign }) {
           <div style={{ display:"flex", gap:10, paddingTop:4, borderTop:"1px solid #F1F5F9" }}>
             <button onClick={()=>{ if(selected) { onAssign(request.id, selected); onClose(); }}} disabled={!selected}
               style={{ flex:1, padding:"10px 0", borderRadius:8, border:"none", background:selected?"#1D4ED8":"#E2E8F0", color:selected?"#fff":"#94A3B8", fontSize:14, fontWeight:600, cursor:selected?"pointer":"not-allowed", fontFamily:"inherit" }}>
-              {request.assignedTo ? "Αλλαγή Θεραπευτή" : "Ανάθεση →"}
+              {request.assigned_to ? "Αλλαγή Θεραπευτή" : "Ανάθεση →"}
             </button>
             <button onClick={onClose} style={{ padding:"10px 20px", borderRadius:8, border:"1px solid #E2E8F0", background:"transparent", color:"#64748B", fontSize:13, fontWeight:600, cursor:"pointer", fontFamily:"inherit" }}>
               Άκυρο
@@ -111,44 +81,43 @@ function AssignModal({ request, onClose, onAssign }) {
 }
 
 export default function RequestsPage() {
-  const [requests, setRequests] = useState(MOCK_REQUESTS);
-  const [selected, setSelected]  = useState(null);
-  const [filter, setFilter]      = useState("all");
-  const [search, setSearch]      = useState("");
-  const [newFromSite, setNewFromSite] = useState(0);
+  const [requests, setRequests] = useState([]);
+  const [therapists, setTherapists] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [selected, setSelected] = useState(null);
+  const [filter, setFilter] = useState("all");
+  const [search, setSearch] = useState("");
 
-  // Load requests from site (localStorage)
   useEffect(() => {
-    const siteRequests = JSON.parse(localStorage.getItem('sessionRequests') || '[]');
-    if (siteRequests.length > 0) {
-      const formatted = siteRequests.map(r => ({
-        id: r.id,
-        name: r.name,
-        phone: r.phone || '—',
-        email: r.email,
-        area: r.city || r.area || '—',
-        source: r.howHeard || 'Site',
-        description: r.description || r.service || '—',
-        status: 'pending',
-        assignedTo: null,
-        freeAssessment: false,
-        submittedAt: r.submittedAt,
-        preferredTherapist: r.preferredTherapist || null,
-        fromSite: true,
-      }));
-      setRequests(prev => {
-        const existingIds = new Set(prev.map(r => r.id));
-        const newOnes = formatted.filter(r => !existingIds.has(r.id));
-        const count = newOnes.filter(r => r.preferredTherapist).length;
-        if (count > 0) setNewFromSite(count);
-        return newOnes.length > 0 ? [...prev, ...newOnes] : prev;
-      });
-    }
+    fetchAll();
   }, []);
 
-  const assignTherapist = (id, therapistName) => {
-    setRequests(prev => prev.map(r => r.id===id ? { ...r, assignedTo:therapistName, status:"active", freeAssessment:true } : r));
-  };
+  async function fetchAll() {
+    setLoading(true);
+    const [{ data: reqs }, { data: thers }] = await Promise.all([
+      supabase.from("requests").select("*").order("created_at", { ascending: false }),
+      supabase.from("therapists").select("id, name, specialty").eq("status", "active"),
+    ]);
+    if (reqs) setRequests(reqs);
+    if (thers) setTherapists(thers);
+    setLoading(false);
+  }
+
+  async function assignTherapist(id, therapistName) {
+    const { error } = await supabase
+      .from("requests")
+      .update({ assigned_to: therapistName, status: "active" })
+      .eq("id", id);
+    if (!error) await fetchAll();
+  }
+
+  async function updateStatus(id, newStatus) {
+    const { error } = await supabase
+      .from("requests")
+      .update({ status: newStatus })
+      .eq("id", id);
+    if (!error) await fetchAll();
+  }
 
   const counts = {
     all:       requests.length,
@@ -159,22 +128,21 @@ export default function RequestsPage() {
 
   const filtered = requests.filter(r => {
     const matchFilter = filter==="all" || r.status===filter;
-    const matchSearch = (r.name+r.area+r.description).toLowerCase().includes(search.toLowerCase());
+    const matchSearch = ((r.name||"")+(r.city||"")+(r.service||"")+(r.description||"")).toLowerCase().includes(search.toLowerCase());
     return matchFilter && matchSearch;
   });
 
+  if (loading) return (
+    <div style={{ padding:24, display:"flex", alignItems:"center", justifyContent:"center", minHeight:400 }}>
+      <div style={{ fontSize:16, color:"#64748B" }}>Φόρτωση αιτημάτων...</div>
+    </div>
+  );
+
   return (
     <div>
-      <div style={{ marginBottom:24, display:"flex", justifyContent:"space-between", alignItems:"flex-start", flexWrap:"wrap", gap:12 }}>
-        <div>
-          <h1 style={{ fontSize:26, fontWeight:700, color:"#0F172A", fontFamily:"'DM Serif Display',serif", margin:0 }}>Αιτήματα</h1>
-          <p style={{ fontSize:13, color:"#94A3B8", marginTop:4 }}>Διαχείριση όλων των αιτημάτων ασθενών</p>
-        </div>
-        {newFromSite > 0 && (
-          <div style={{ background:"#FEF3C7", border:"1px solid #FCD34D", borderRadius:10, padding:"10px 16px", fontSize:13, color:"#92400E", fontWeight:600 }}>
-            ⭐ {newFromSite} αίτημα με προτίμηση θεραπευτή από το site
-          </div>
-        )}
+      <div style={{ marginBottom:24 }}>
+        <h1 style={{ fontSize:26, fontWeight:700, color:"#0F172A", margin:0 }}>Αιτήματα</h1>
+        <p style={{ fontSize:13, color:"#94A3B8", marginTop:4 }}>Διαχείριση όλων των αιτημάτων ασθενών</p>
       </div>
 
       {/* Summary cards */}
@@ -187,7 +155,7 @@ export default function RequestsPage() {
         ].map(c => (
           <div key={c.label} style={{ flex:1, minWidth:120, background:c.bg, border:`1px solid ${c.border}`, borderRadius:12, padding:"16px 20px" }}>
             <div style={{ fontSize:11, fontWeight:700, color:c.text, textTransform:"uppercase", letterSpacing:"0.05em" }}>{c.label}</div>
-            <div style={{ fontSize:32, fontWeight:700, color:c.text, fontFamily:"'DM Serif Display',serif", lineHeight:1.1, marginTop:4 }}>{c.value}</div>
+            <div style={{ fontSize:32, fontWeight:700, color:c.text, lineHeight:1.1, marginTop:4 }}>{c.value}</div>
           </div>
         ))}
       </div>
@@ -201,61 +169,71 @@ export default function RequestsPage() {
             </button>
           ))}
         </div>
-        <input type="text" placeholder="Αναζήτηση ονόματος, περιοχής, προβλήματος..." value={search} onChange={e=>setSearch(e.target.value)}
+        <input type="text" placeholder="Αναζήτηση..." value={search} onChange={e=>setSearch(e.target.value)}
           style={{ flex:1, minWidth:200, padding:"9px 14px", borderRadius:8, border:"1px solid #E2E8F0", fontSize:13, fontFamily:"inherit", background:"#fff", outline:"none", color:"#0F172A" }}/>
       </div>
 
       {/* Requests list */}
       <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
-        {filtered.length===0
-          ? <div style={{ padding:40, textAlign:"center", color:"#94A3B8", fontSize:14, background:"#fff", borderRadius:14, border:"1px solid #E2E8F0" }}>Δεν βρέθηκαν αιτήματα</div>
-          : filtered.map(r => {
-            const st = STATUS_MAP[r.status];
-            const src = SOURCE_COLORS[r.source]||{bg:"#F3F4F6",color:"#374151"};
-            return (
-              <div key={r.id} style={{ background:"#fff", borderRadius:14, border:`1px solid ${r.preferredTherapist && r.status==="pending" ? "#FCD34D" : "#E2E8F0"}`, padding:"16px 20px", display:"flex", alignItems:"flex-start", gap:14 }}>
-                <Avatar name={r.name}/>
-                <div style={{ flex:1, minWidth:0 }}>
-                  <div style={{ display:"flex", alignItems:"center", gap:8, flexWrap:"wrap", marginBottom:4 }}>
-                    <span style={{ fontWeight:700, fontSize:15, color:"#0F172A" }}>{r.name}</span>
-                    <Badge label={st.label} bg={st.bg} color={st.color}/>
-                    <Badge label={r.source} bg={src.bg} color={src.color}/>
-                    {r.freeAssessment && <Badge label="✓ Αξιολόγηση" bg="#D1FAE5" color="#065F46"/>}
-                    {r.fromSite && <Badge label="🌐 Από Site" bg="#EFF6FF" color="#1D4ED8"/>}
-                  </div>
-                  <div style={{ fontSize:12, color:"#64748B", marginBottom:6 }}>{r.phone} · {r.email} · {r.area} · {r.submittedAt}</div>
-                  {/* Therapist preference badge */}
-                  {r.preferredTherapist && (
-                    <div style={{ display:"inline-flex", alignItems:"center", gap:6, background:"#FEF3C7", border:"1px solid #FCD34D", borderRadius:8, padding:"6px 12px", fontSize:12, fontWeight:600, color:"#92400E", marginBottom:8 }}>
-                      ⭐ Προτίμηση θεραπευτή: <strong>{r.preferredTherapist}</strong>
-                    </div>
-                  )}
-                  <div style={{ fontSize:13, color:"#475569", background:"#F8FAFC", padding:"8px 12px", borderRadius:8, borderLeft:"3px solid #CBD5E1", marginBottom:r.assignedTo?8:0 }}>
-                    {r.description}
-                  </div>
-                  {r.assignedTo && (
-                    <div style={{ fontSize:12, color:"#1D4ED8", marginTop:6, fontWeight:600 }}>
-                      ✓ Ανατέθηκε σε: {r.assignedTo}
-                    </div>
-                  )}
+        {filtered.length===0 ? (
+          <div style={{ padding:40, textAlign:"center", color:"#94A3B8", fontSize:14, background:"#fff", borderRadius:14, border:"1px solid #E2E8F0" }}>
+            {requests.length === 0 ? "Δεν υπάρχουν αιτήματα ακόμα." : "Δεν βρέθηκαν αιτήματα"}
+          </div>
+        ) : filtered.map(r => {
+          const st = STATUS_MAP[r.status] || STATUS_MAP.pending;
+          return (
+            <div key={r.id} style={{ background:"#fff", borderRadius:14, border:`1px solid ${r.preferred_therapist && r.status==="pending" ? "#FCD34D" : "#E2E8F0"}`, padding:"16px 20px", display:"flex", alignItems:"flex-start", gap:14 }}>
+              <Avatar name={r.name}/>
+              <div style={{ flex:1, minWidth:0 }}>
+                <div style={{ display:"flex", alignItems:"center", gap:8, flexWrap:"wrap", marginBottom:4 }}>
+                  <span style={{ fontWeight:700, fontSize:15, color:"#0F172A" }}>{r.name}</span>
+                  <Badge label={st.label} bg={st.bg} color={st.color}/>
+                  {r.preferred_therapist && <Badge label="⭐ Έχει προτίμηση" bg="#FEF3C7" color="#92400E"/>}
                 </div>
-                <div style={{ flexShrink:0 }}>
-                  {r.status !== "completed" && (
-                    <button onClick={()=>setSelected(r)}
-                      style={{ padding:"8px 16px", borderRadius:8, border: r.assignedTo?"1px solid #E2E8F0":"none", background:r.assignedTo?"#F8FAFC":"#1D4ED8", color:r.assignedTo?"#475569":"#fff", fontSize:13, fontWeight:600, cursor:"pointer", fontFamily:"inherit" }}
-                      onMouseEnter={e=>e.currentTarget.style.opacity="0.8"}
-                      onMouseLeave={e=>e.currentTarget.style.opacity="1"}>
-                      {r.assignedTo ? "Αλλαγή →" : "Ανάθεση →"}
-                    </button>
-                  )}
+                <div style={{ fontSize:12, color:"#64748B", marginBottom:6 }}>
+                  {r.phone} · {r.email} · {r.city} · {new Date(r.created_at).toLocaleDateString("el-GR")}
                 </div>
+                {r.preferred_therapist && (
+                  <div style={{ display:"inline-flex", alignItems:"center", gap:6, background:"#FEF3C7", border:"1px solid #FCD34D", borderRadius:8, padding:"6px 12px", fontSize:12, fontWeight:600, color:"#92400E", marginBottom:8 }}>
+                    ⭐ Προτίμηση: <strong>{r.preferred_therapist}</strong>
+                  </div>
+                )}
+                <div style={{ fontSize:13, color:"#475569", background:"#F8FAFC", padding:"8px 12px", borderRadius:8, borderLeft:"3px solid #CBD5E1" }}>
+                  {r.service}{r.description ? ` — ${r.description}` : ''}
+                </div>
+                {r.assigned_to && (
+                  <div style={{ fontSize:12, color:"#1D4ED8", marginTop:6, fontWeight:600 }}>
+                    ✓ Ανατέθηκε σε: {r.assigned_to}
+                  </div>
+                )}
               </div>
-            );
-          })
-        }
+              <div style={{ flexShrink:0, display:"flex", flexDirection:"column", gap:6 }}>
+                {r.status !== "completed" && (
+                  <button onClick={()=>setSelected(r)}
+                    style={{ padding:"8px 16px", borderRadius:8, border:r.assigned_to?"1px solid #E2E8F0":"none", background:r.assigned_to?"#F8FAFC":"#1D4ED8", color:r.assigned_to?"#475569":"#fff", fontSize:13, fontWeight:600, cursor:"pointer", fontFamily:"inherit" }}>
+                    {r.assigned_to ? "Αλλαγή →" : "Ανάθεση →"}
+                  </button>
+                )}
+                {r.status === "active" && (
+                  <button onClick={()=>updateStatus(r.id, "completed")}
+                    style={{ padding:"8px 16px", borderRadius:8, border:"none", background:"#D1FAE5", color:"#065F46", fontSize:13, fontWeight:600, cursor:"pointer", fontFamily:"inherit" }}>
+                    ✓ Ολοκλήρωση
+                  </button>
+                )}
+              </div>
+            </div>
+          );
+        })}
       </div>
 
-      {selected && <AssignModal request={selected} onClose={()=>setSelected(null)} onAssign={assignTherapist}/>}
+      {selected && (
+        <AssignModal
+          request={selected}
+          therapists={therapists}
+          onClose={()=>setSelected(null)}
+          onAssign={assignTherapist}
+        />
+      )}
     </div>
   );
 }
