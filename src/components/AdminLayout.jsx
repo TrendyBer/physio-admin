@@ -12,6 +12,7 @@ import CategoriesPage from "./CategoriesPage";
 import ReportsPage from "./ReportsPage";
 import SettingsPage from "./SettingsPage";
 import BlogPage from "./BlogPage";
+import CMSPage from "./CMSPage";
 
 // ── PLACEHOLDER ───────────────────────────────────────────
 function ComingSoon({ title }) {
@@ -36,6 +37,7 @@ const NAV_ITEMS = [
   { id: "reports",    label: "Αναφορές",            icon: "◰" },
   { id: "settings",   label: "Ρυθμίσεις",           icon: "⚙" },
   { id: "blog",       label: "Blog",                icon: "✍" },
+  { id: "cms",        label: "🎨 CMS Site",         icon: "🎨" },
 ];
 
 // ── SIDEBAR ───────────────────────────────────────────────
@@ -102,8 +104,8 @@ export default function AdminLayout() {
 
   function renderPage() {
     switch (activePage) {
-      case "dashboard":  return <AdminDashboard  onNavigate={setActivePage} />;
-      case "therapists": return <TherapistsPage  onNavigate={setActivePage} />;
+      case "dashboard":  return <AdminDashboard onNavigate={setActivePage} />;
+      case "therapists": return <TherapistsPage onNavigate={setActivePage} />;
       case "patients":   return <PatientsPage />;
       case "requests":   return <RequestsPage />;
       case "payments":   return <PaymentsPage />;
@@ -112,6 +114,7 @@ export default function AdminLayout() {
       case "reports":    return <ReportsPage />;
       case "settings":   return <SettingsPage />;
       case "blog":       return <BlogPage />;
+      case "cms":        return <CMSPage />;
       default:           return <AdminDashboard onNavigate={setActivePage} />;
     }
   }
