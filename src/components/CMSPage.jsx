@@ -10,6 +10,7 @@ const colors = {
 const PAGES = [
   { id: "homepage", label: "🏠 Homepage" },
   { id: "services", label: "⚕️ Υπηρεσίες" },
+  { id: "therapists", label: "👨‍⚕️ Θεραπευτές" },
 ];
 
 const SECTIONS = {
@@ -23,9 +24,12 @@ const SECTIONS = {
   ],
   services: [
     { id: "hero", label: "Hero" },
-    { id: "services_list", label: "Services List" },
-    { id: "conditions", label: "Conditions" },
-    { id: "faq", label: "FAQ" },
+  ],
+  therapists: [
+    { id: "hero", label: "Hero" },
+    { id: "whywork", label: "Why Work With Us" },
+    { id: "workflow", label: "Workflow Steps" },
+    { id: "platform", label: "Platform" },
   ],
 };
 
@@ -38,9 +42,7 @@ export default function CMSPage() {
   const [uploading, setUploading] = useState(false);
   const [saved, setSaved] = useState(false);
 
-  useEffect(() => {
-    fetchContent();
-  }, [activePage, activeSection]);
+  useEffect(() => { fetchContent(); }, [activePage, activeSection]);
 
   async function fetchContent() {
     setLoading(true);
@@ -100,10 +102,10 @@ export default function CMSPage() {
       </div>
 
       {/* Page Tabs */}
-      <div style={{ display: "flex", gap: 8, marginBottom: 24 }}>
+      <div style={{ display: "flex", gap: 8, marginBottom: 24, flexWrap: "wrap" }}>
         {PAGES.map(p => (
           <button key={p.id} onClick={() => { setActivePage(p.id); setActiveSection(SECTIONS[p.id][0].id); }}
-            style={{ padding: "8px 20px", borderRadius: 8, border: "none", fontSize: 14, fontWeight: 600, cursor: "pointer", background: activePage === p.id ? colors.navy : "#fff", color: activePage === p.id ? "#fff" : colors.gray, border: `1px solid ${colors.border}` }}>
+            style={{ padding: "8px 20px", borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: "pointer", background: activePage === p.id ? colors.navy : "#fff", color: activePage === p.id ? "#fff" : colors.gray, border: `1px solid ${colors.border}` }}>
             {p.label}
           </button>
         ))}
@@ -150,9 +152,7 @@ function SectionEditor({ page, section, content, onSave, onUpload, saving, uploa
   useEffect(() => {
     setElData(content?.content_el || {});
     setEnData(content?.content_en || {});
-  }, [content, section]);
-
-  const key = `${page}-${section}`;
+  }, [content, section, page]);
 
   return (
     <div>
@@ -169,45 +169,27 @@ function SectionEditor({ page, section, content, onSave, onUpload, saving, uploa
         </div>
       </div>
 
-      {/* Hero Section */}
-      {section === "hero" && page === "homepage" && (
-        <HeroEditor elData={elData} enData={enData} setElData={setElData} setEnData={setEnData} onUpload={onUpload} uploading={uploading} />
-      )}
+      {/* Homepage sections */}
+      {page === "homepage" && section === "hero" && <HeroEditor elData={elData} enData={enData} setElData={setElData} setEnData={setEnData} onUpload={onUpload} uploading={uploading} />}
+      {page === "homepage" && section === "whyus" && <WhyUsEditor elData={elData} enData={enData} setElData={setElData} setEnData={setEnData} />}
+      {page === "homepage" && section === "howitworks" && <HowItWorksEditor elData={elData} enData={enData} setElData={setElData} setEnData={setEnData} />}
+      {page === "homepage" && section === "benefits" && <BenefitsEditor elData={elData} enData={enData} setElData={setElData} setEnData={setEnData} onUpload={onUpload} uploading={uploading} />}
+      {page === "homepage" && section === "services" && <ServicesEditor elData={elData} enData={enData} setElData={setElData} setEnData={setEnData} onUpload={onUpload} uploading={uploading} />}
+      {page === "homepage" && section === "faq" && <FaqEditor elData={elData} enData={enData} setElData={setElData} setEnData={setEnData} />}
 
-      {/* WhyUs Section */}
-      {section === "whyus" && (
-        <WhyUsEditor elData={elData} enData={enData} setElData={setElData} setEnData={setEnData} />
-      )}
+      {/* Services page sections */}
+      {page === "services" && section === "hero" && <ServicesHeroEditor elData={elData} enData={enData} setElData={setElData} setEnData={setEnData} />}
 
-      {/* HowItWorks Section */}
-      {section === "howitworks" && (
-        <HowItWorksEditor elData={elData} enData={enData} setElData={setElData} setEnData={setEnData} />
-      )}
-
-      {/* Benefits Section */}
-      {section === "benefits" && (
-        <BenefitsEditor elData={elData} enData={enData} setElData={setElData} setEnData={setEnData} onUpload={onUpload} uploading={uploading} />
-      )}
-
-      {/* Services Section */}
-      {section === "services" && (
-        <ServicesEditor elData={elData} enData={enData} setElData={setElData} setEnData={setEnData} onUpload={onUpload} uploading={uploading} />
-      )}
-
-      {/* FAQ Section */}
-      {section === "faq" && (
-        <FaqEditor elData={elData} enData={enData} setElData={setElData} setEnData={setEnData} />
-      )}
-
-      {/* Services Page Hero */}
-      {section === "hero" && page === "services" && (
-        <ServicesHeroEditor elData={elData} enData={enData} setElData={setElData} setEnData={setEnData} />
-      )}
+      {/* Therapists page sections */}
+      {page === "therapists" && section === "hero" && <TherapistsHeroEditor elData={elData} enData={enData} setElData={setElData} setEnData={setEnData} />}
+      {page === "therapists" && section === "whywork" && <WhyWorkEditor elData={elData} enData={enData} setElData={setElData} setEnData={setEnData} />}
+      {page === "therapists" && section === "workflow" && <WorkflowEditor elData={elData} enData={enData} setElData={setElData} setEnData={setEnData} />}
+      {page === "therapists" && section === "platform" && <PlatformEditor elData={elData} enData={enData} setElData={setElData} setEnData={setEnData} />}
     </div>
   );
 }
 
-// ─── FIELD HELPERS ───────────────────────────────────────────────────────────
+// ─── HELPERS ─────────────────────────────────────────────────────────────────
 
 function Field({ label, children }) {
   return (
@@ -232,7 +214,7 @@ function Textarea({ value, onChange, rows = 3 }) {
   );
 }
 
-function ImageUpload({ value, onChange, onUpload, uploading, label }) {
+function ImageUpload({ value, onChange, onUpload, uploading }) {
   return (
     <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
       {value ? (
@@ -248,6 +230,7 @@ function ImageUpload({ value, onChange, onUpload, uploading, label }) {
         </label>
         <input value={value || ""} onChange={e => onChange(e.target.value)} placeholder="ή URL εικόνας..."
           style={{ padding: "6px 10px", border: "1px solid #E2E8F0", borderRadius: 6, fontSize: 12, width: 200 }} />
+        {value && <button onClick={() => onChange("")} style={{ background: "#FEF2F2", color: "#EF4444", border: "1px solid #FEE2E2", borderRadius: 6, padding: "4px 10px", fontSize: 12, cursor: "pointer" }}>🗑 Αφαίρεση</button>}
       </div>
     </div>
   );
@@ -266,7 +249,32 @@ function LangTabs({ active, onChange }) {
   );
 }
 
-// ─── SECTION EDITORS ─────────────────────────────────────────────────────────
+function CardList({ items, onChange, fields }) {
+  const upd = (i, key, val) => {
+    const updated = [...(items || [])];
+    updated[i] = { ...updated[i], [key]: val };
+    onChange(updated);
+  };
+  return (
+    <div>
+      {(items || []).map((item, i) => (
+        <div key={i} style={{ border: "1px solid #E2E8F0", borderRadius: 10, padding: 16, marginBottom: 12 }}>
+          <div style={{ fontSize: 13, fontWeight: 700, color: "#0F172A", marginBottom: 10 }}>#{i + 1}</div>
+          {fields.map(f => (
+            <Field key={f.key} label={f.label}>
+              {f.type === "textarea"
+                ? <Textarea value={item[f.key]} onChange={v => upd(i, f.key, v)} rows={2} />
+                : <Input value={item[f.key]} onChange={v => upd(i, f.key, v)} />
+              }
+            </Field>
+          ))}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// ─── HOMEPAGE EDITORS ─────────────────────────────────────────────────────────
 
 function HeroEditor({ elData, enData, setElData, setEnData, onUpload, uploading }) {
   const [lang, setLang] = useState("el");
@@ -281,8 +289,8 @@ function HeroEditor({ elData, enData, setElData, setEnData, onUpload, uploading 
       <Field label="Τίτλος (μέρος 1)"><Input value={data.title1} onChange={v => upd("title1", v)} /></Field>
       <Field label="Τίτλος (μέρος 2 - italic)"><Input value={data.title2} onChange={v => upd("title2", v)} /></Field>
       <Field label="Περιγραφή"><Textarea value={data.desc} onChange={v => upd("desc", v)} /></Field>
-      <Field label="Κουμπί 1 (CTA)"><Input value={data.cta} onChange={v => upd("cta", v)} /></Field>
-      <Field label="Κουμπί 2 (How It Works)"><Input value={data.how} onChange={v => upd("how", v)} /></Field>
+      <Field label="Κουμπί 1"><Input value={data.cta} onChange={v => upd("cta", v)} /></Field>
+      <Field label="Κουμπί 2"><Input value={data.how} onChange={v => upd("how", v)} /></Field>
       <Field label="Pills (χωρισμένα με |)">
         <Input value={(data.pills || []).join(" | ")} onChange={v => upd("pills", v.split(" | "))} />
       </Field>
@@ -298,11 +306,6 @@ function WhyUsEditor({ elData, enData, setElData, setEnData }) {
   const data = lang === "el" ? elData : enData;
   const setData = lang === "el" ? setElData : setEnData;
   const upd = (key, val) => setData(prev => ({ ...prev, [key]: val }));
-  const updCard = (i, key, val) => {
-    const cards = [...(data.cards || [])];
-    cards[i] = { ...cards[i], [key]: val };
-    upd("cards", cards);
-  };
 
   return (
     <div>
@@ -310,14 +313,8 @@ function WhyUsEditor({ elData, enData, setElData, setEnData }) {
       <Field label="Τίτλος"><Input value={data.title} onChange={v => upd("title", v)} /></Field>
       <Field label="Τίτλος (italic)"><Input value={data.titleEm} onChange={v => upd("titleEm", v)} /></Field>
       <Field label="Περιγραφή"><Textarea value={data.desc} onChange={v => upd("desc", v)} /></Field>
-      {(data.cards || []).map((card, i) => (
-        <div key={i} style={{ border: "1px solid #E2E8F0", borderRadius: 10, padding: 16, marginBottom: 12 }}>
-          <div style={{ fontSize: 13, fontWeight: 700, color: "#0F172A", marginBottom: 10 }}>Card {i + 1}</div>
-          <Field label="Icon"><Input value={card.icon} onChange={v => updCard(i, "icon", v)} /></Field>
-          <Field label="Τίτλος"><Input value={card.title} onChange={v => updCard(i, "title", v)} /></Field>
-          <Field label="Περιγραφή"><Textarea value={card.desc} onChange={v => updCard(i, "desc", v)} rows={2} /></Field>
-        </div>
-      ))}
+      <div style={{ fontSize: 13, fontWeight: 700, color: "#0F172A", marginBottom: 12 }}>Cards</div>
+      <CardList items={data.cards} onChange={v => upd("cards", v)} fields={[{ key: "icon", label: "Icon" }, { key: "title", label: "Τίτλος" }, { key: "desc", label: "Περιγραφή", type: "textarea" }]} />
     </div>
   );
 }
@@ -327,11 +324,6 @@ function HowItWorksEditor({ elData, enData, setElData, setEnData }) {
   const data = lang === "el" ? elData : enData;
   const setData = lang === "el" ? setElData : setEnData;
   const upd = (key, val) => setData(prev => ({ ...prev, [key]: val }));
-  const updStep = (i, key, val) => {
-    const steps = [...(data.steps || [])];
-    steps[i] = { ...steps[i], [key]: val };
-    upd("steps", steps);
-  };
 
   return (
     <div>
@@ -340,14 +332,8 @@ function HowItWorksEditor({ elData, enData, setElData, setEnData }) {
       <Field label="Τίτλος (italic)"><Input value={data.titleEm} onChange={v => upd("titleEm", v)} /></Field>
       <Field label="Περιγραφή"><Textarea value={data.desc} onChange={v => upd("desc", v)} /></Field>
       <Field label="Κουμπί CTA"><Input value={data.cta} onChange={v => upd("cta", v)} /></Field>
-      {(data.steps || []).map((step, i) => (
-        <div key={i} style={{ border: "1px solid #E2E8F0", borderRadius: 10, padding: 16, marginBottom: 12 }}>
-          <div style={{ fontSize: 13, fontWeight: 700, color: "#0F172A", marginBottom: 10 }}>Step {i + 1}</div>
-          <Field label="Label"><Input value={step.label} onChange={v => updStep(i, "label", v)} /></Field>
-          <Field label="Τίτλος"><Input value={step.title} onChange={v => updStep(i, "title", v)} /></Field>
-          <Field label="Περιγραφή"><Textarea value={step.desc} onChange={v => updStep(i, "desc", v)} rows={2} /></Field>
-        </div>
-      ))}
+      <div style={{ fontSize: 13, fontWeight: 700, color: "#0F172A", marginBottom: 12 }}>Steps</div>
+      <CardList items={data.steps} onChange={v => upd("steps", v)} fields={[{ key: "label", label: "Label" }, { key: "title", label: "Τίτλος" }, { key: "desc", label: "Περιγραφή", type: "textarea" }]} />
     </div>
   );
 }
@@ -357,11 +343,6 @@ function BenefitsEditor({ elData, enData, setElData, setEnData, onUpload, upload
   const data = lang === "el" ? elData : enData;
   const setData = lang === "el" ? setElData : setEnData;
   const upd = (key, val) => setData(prev => ({ ...prev, [key]: val }));
-  const updBenefit = (i, key, val) => {
-    const benefits = [...(data.benefits || [])];
-    benefits[i] = { ...benefits[i], [key]: val };
-    upd("benefits", benefits);
-  };
 
   return (
     <div>
@@ -369,17 +350,9 @@ function BenefitsEditor({ elData, enData, setElData, setEnData, onUpload, upload
       <Field label="Τίτλος"><Input value={data.title} onChange={v => upd("title", v)} /></Field>
       <Field label="Τίτλος (italic)"><Input value={data.titleEm} onChange={v => upd("titleEm", v)} /></Field>
       <Field label="Περιγραφή"><Textarea value={data.desc} onChange={v => upd("desc", v)} /></Field>
-      <Field label="Εικόνα">
-        <ImageUpload value={data.image_url} onChange={v => upd("image_url", v)} onUpload={onUpload} uploading={uploading} />
-      </Field>
-      {(data.benefits || []).map((b, i) => (
-        <div key={i} style={{ border: "1px solid #E2E8F0", borderRadius: 10, padding: 16, marginBottom: 12 }}>
-          <div style={{ fontSize: 13, fontWeight: 700, color: "#0F172A", marginBottom: 10 }}>Benefit {i + 1}</div>
-          <Field label="Icon"><Input value={b.icon} onChange={v => updBenefit(i, "icon", v)} /></Field>
-          <Field label="Τίτλος"><Input value={b.title} onChange={v => updBenefit(i, "title", v)} /></Field>
-          <Field label="Περιγραφή"><Textarea value={b.desc} onChange={v => updBenefit(i, "desc", v)} rows={2} /></Field>
-        </div>
-      ))}
+      <Field label="Εικόνα"><ImageUpload value={data.image_url} onChange={v => upd("image_url", v)} onUpload={onUpload} uploading={uploading} /></Field>
+      <div style={{ fontSize: 13, fontWeight: 700, color: "#0F172A", marginBottom: 12 }}>Benefits</div>
+      <CardList items={data.benefits} onChange={v => upd("benefits", v)} fields={[{ key: "icon", label: "Icon" }, { key: "title", label: "Τίτλος" }, { key: "desc", label: "Περιγραφή", type: "textarea" }]} />
     </div>
   );
 }
@@ -401,16 +374,14 @@ function ServicesEditor({ elData, enData, setElData, setEnData, onUpload, upload
       <Field label="Τίτλος"><Input value={data.title} onChange={v => upd("title", v)} /></Field>
       <Field label="Τίτλος (italic)"><Input value={data.titleEm} onChange={v => upd("titleEm", v)} /></Field>
       <Field label="Περιγραφή"><Textarea value={data.desc} onChange={v => upd("desc", v)} /></Field>
-      <Field label="Κουμπί Όλες οι Υπηρεσίες"><Input value={data.viewAll} onChange={v => upd("viewAll", v)} /></Field>
+      <Field label="Κουμπί Υπηρεσίες"><Input value={data.viewAll} onChange={v => upd("viewAll", v)} /></Field>
       {(data.services || []).map((s, i) => (
         <div key={i} style={{ border: "1px solid #E2E8F0", borderRadius: 10, padding: 16, marginBottom: 12 }}>
           <div style={{ fontSize: 13, fontWeight: 700, color: "#0F172A", marginBottom: 10 }}>Service {i + 1}</div>
           <Field label="Τίτλος"><Input value={s.title} onChange={v => updService(i, "title", v)} /></Field>
           <Field label="Περιγραφή"><Textarea value={s.desc} onChange={v => updService(i, "desc", v)} rows={2} /></Field>
           <Field label="Τιμή"><Input value={s.price} onChange={v => updService(i, "price", v)} /></Field>
-          <Field label="Εικόνα">
-            <ImageUpload value={s.image_url} onChange={v => updService(i, "image_url", v)} onUpload={onUpload} uploading={uploading} />
-          </Field>
+          <Field label="Εικόνα"><ImageUpload value={s.image_url} onChange={v => updService(i, "image_url", v)} onUpload={onUpload} uploading={uploading} /></Field>
         </div>
       ))}
     </div>
@@ -452,6 +423,8 @@ function FaqEditor({ elData, enData, setElData, setEnData }) {
   );
 }
 
+// ─── SERVICES PAGE EDITORS ────────────────────────────────────────────────────
+
 function ServicesHeroEditor({ elData, enData, setElData, setEnData }) {
   const [lang, setLang] = useState("el");
   const data = lang === "el" ? elData : enData;
@@ -468,6 +441,81 @@ function ServicesHeroEditor({ elData, enData, setElData, setEnData }) {
       <Field label="Badges (χωρισμένα με |)">
         <Input value={(data.badges || []).join(" | ")} onChange={v => upd("badges", v.split(" | "))} />
       </Field>
+    </div>
+  );
+}
+
+// ─── THERAPISTS PAGE EDITORS ──────────────────────────────────────────────────
+
+function TherapistsHeroEditor({ elData, enData, setElData, setEnData }) {
+  const [lang, setLang] = useState("el");
+  const data = lang === "el" ? elData : enData;
+  const setData = lang === "el" ? setElData : setEnData;
+  const upd = (key, val) => setData(prev => ({ ...prev, [key]: val }));
+
+  return (
+    <div>
+      <LangTabs active={lang} onChange={setLang} />
+      <Field label="Badge"><Input value={data.badge} onChange={v => upd("badge", v)} /></Field>
+      <Field label="Τίτλος"><Input value={data.hero} onChange={v => upd("hero", v)} /></Field>
+      <Field label="Τίτλος (italic)"><Input value={data.heroEm} onChange={v => upd("heroEm", v)} /></Field>
+      <Field label="Περιγραφή"><Textarea value={data.heroDesc} onChange={v => upd("heroDesc", v)} /></Field>
+      <Field label="Κουμπί"><Input value={data.heroBtn} onChange={v => upd("heroBtn", v)} /></Field>
+    </div>
+  );
+}
+
+function WhyWorkEditor({ elData, enData, setElData, setEnData }) {
+  const [lang, setLang] = useState("el");
+  const data = lang === "el" ? elData : enData;
+  const setData = lang === "el" ? setElData : setEnData;
+  const upd = (key, val) => setData(prev => ({ ...prev, [key]: val }));
+
+  return (
+    <div>
+      <LangTabs active={lang} onChange={setLang} />
+      <Field label="Τίτλος"><Input value={data.title} onChange={v => upd("title", v)} /></Field>
+      <Field label="Τίτλος (italic)"><Input value={data.titleEm} onChange={v => upd("titleEm", v)} /></Field>
+      <Field label="Περιγραφή"><Textarea value={data.desc} onChange={v => upd("desc", v)} /></Field>
+      <div style={{ fontSize: 13, fontWeight: 700, color: "#0F172A", marginBottom: 12 }}>Benefits</div>
+      <CardList items={data.benefits} onChange={v => upd("benefits", v)} fields={[{ key: "title", label: "Τίτλος" }, { key: "desc", label: "Περιγραφή", type: "textarea" }]} />
+    </div>
+  );
+}
+
+function WorkflowEditor({ elData, enData, setElData, setEnData }) {
+  const [lang, setLang] = useState("el");
+  const data = lang === "el" ? elData : enData;
+  const setData = lang === "el" ? setElData : setEnData;
+  const upd = (key, val) => setData(prev => ({ ...prev, [key]: val }));
+
+  return (
+    <div>
+      <LangTabs active={lang} onChange={setLang} />
+      <Field label="Τίτλος"><Input value={data.title} onChange={v => upd("title", v)} /></Field>
+      <Field label="Τίτλος (italic)"><Input value={data.titleEm} onChange={v => upd("titleEm", v)} /></Field>
+      <Field label="Περιγραφή"><Textarea value={data.desc} onChange={v => upd("desc", v)} /></Field>
+      <Field label="Κουμπί"><Input value={data.btn} onChange={v => upd("btn", v)} /></Field>
+      <div style={{ fontSize: 13, fontWeight: 700, color: "#0F172A", marginBottom: 12 }}>Steps</div>
+      <CardList items={data.steps} onChange={v => upd("steps", v)} fields={[{ key: "num", label: "Label (π.χ. Βήμα 1)" }, { key: "title", label: "Τίτλος" }, { key: "desc", label: "Περιγραφή", type: "textarea" }]} />
+    </div>
+  );
+}
+
+function PlatformEditor({ elData, enData, setElData, setEnData }) {
+  const [lang, setLang] = useState("el");
+  const data = lang === "el" ? elData : enData;
+  const setData = lang === "el" ? setElData : setEnData;
+  const upd = (key, val) => setData(prev => ({ ...prev, [key]: val }));
+
+  return (
+    <div>
+      <LangTabs active={lang} onChange={setLang} />
+      <Field label="Τίτλος"><Input value={data.title} onChange={v => upd("title", v)} /></Field>
+      <Field label="Τίτλος (italic)"><Input value={data.titleEm} onChange={v => upd("titleEm", v)} /></Field>
+      <Field label="Περιγραφή"><Textarea value={data.desc} onChange={v => upd("desc", v)} /></Field>
+      <div style={{ fontSize: 13, fontWeight: 700, color: "#0F172A", marginBottom: 12 }}>Points</div>
+      <CardList items={data.points} onChange={v => upd("points", v)} fields={[{ key: "title", label: "Τίτλος" }, { key: "desc", label: "Περιγραφή", type: "textarea" }]} />
     </div>
   );
 }
