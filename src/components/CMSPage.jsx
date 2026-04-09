@@ -182,7 +182,7 @@ function SectionEditor({ page, section, content, onSave, onUpload, saving, uploa
 
       {/* Therapists page sections */}
       {page === "therapists" && section === "hero" && <TherapistsHeroEditor elData={elData} enData={enData} setElData={setElData} setEnData={setEnData} />}
-      {page === "therapists" && section === "whywork" && <WhyWorkEditor elData={elData} enData={enData} setElData={setElData} setEnData={setEnData} />}
+     {page === "therapists" && section === "whywork" && <WhyWorkEditor elData={elData} enData={enData} setElData={setElData} setEnData={setEnData} onUpload={onUpload} uploading={uploading} />}
       {page === "therapists" && section === "workflow" && <WorkflowEditor elData={elData} enData={enData} setElData={setElData} setEnData={setEnData} />}
       {page === "therapists" && section === "platform" && <PlatformEditor elData={elData} enData={enData} setElData={setElData} setEnData={setEnData} />}
     </div>
