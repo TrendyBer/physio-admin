@@ -101,7 +101,6 @@ export default function CMSPage() {
         <p style={{ fontSize: 14, color: colors.gray }}>Επεξεργασία κειμένων και εικόνων του site</p>
       </div>
 
-      {/* Page Tabs */}
       <div style={{ display: "flex", gap: 8, marginBottom: 24, flexWrap: "wrap" }}>
         {PAGES.map(p => (
           <button key={p.id} onClick={() => { setActivePage(p.id); setActiveSection(SECTIONS[p.id][0].id); }}
@@ -112,7 +111,6 @@ export default function CMSPage() {
       </div>
 
       <div style={{ display: "grid", gridTemplateColumns: "220px 1fr", gap: 24 }}>
-        {/* Section Sidebar */}
         <div style={{ background: "#fff", border: `1px solid ${colors.border}`, borderRadius: 12, padding: 16, height: "fit-content" }}>
           <div style={{ fontSize: 12, fontWeight: 700, color: colors.gray, textTransform: "uppercase", letterSpacing: ".05em", marginBottom: 12 }}>Sections</div>
           {sections.map(s => (
@@ -123,7 +121,6 @@ export default function CMSPage() {
           ))}
         </div>
 
-        {/* Editor */}
         <div style={{ background: "#fff", border: `1px solid ${colors.border}`, borderRadius: 12, padding: 24 }}>
           {loading ? (
             <div style={{ textAlign: "center", color: colors.gray, padding: 40 }}>Φόρτωση...</div>
@@ -169,7 +166,6 @@ function SectionEditor({ page, section, content, onSave, onUpload, saving, uploa
         </div>
       </div>
 
-      {/* Homepage sections */}
       {page === "homepage" && section === "hero" && <HeroEditor elData={elData} enData={enData} setElData={setElData} setEnData={setEnData} onUpload={onUpload} uploading={uploading} />}
       {page === "homepage" && section === "whyus" && <WhyUsEditor elData={elData} enData={enData} setElData={setElData} setEnData={setEnData} />}
       {page === "homepage" && section === "howitworks" && <HowItWorksEditor elData={elData} enData={enData} setElData={setElData} setEnData={setEnData} />}
@@ -177,12 +173,10 @@ function SectionEditor({ page, section, content, onSave, onUpload, saving, uploa
       {page === "homepage" && section === "services" && <ServicesEditor elData={elData} enData={enData} setElData={setElData} setEnData={setEnData} onUpload={onUpload} uploading={uploading} />}
       {page === "homepage" && section === "faq" && <FaqEditor elData={elData} enData={enData} setElData={setElData} setEnData={setEnData} />}
 
-      {/* Services page sections */}
       {page === "services" && section === "hero" && <ServicesHeroEditor elData={elData} enData={enData} setElData={setElData} setEnData={setEnData} />}
 
-      {/* Therapists page sections */}
       {page === "therapists" && section === "hero" && <TherapistsHeroEditor elData={elData} enData={enData} setElData={setElData} setEnData={setEnData} />}
-     {page === "therapists" && section === "whywork" && <WhyWorkEditor elData={elData} enData={enData} setElData={setElData} setEnData={setEnData} onUpload={onUpload} uploading={uploading} />}
+      {page === "therapists" && section === "whywork" && <WhyWorkEditor elData={elData} enData={enData} setElData={setElData} setEnData={setEnData} onUpload={onUpload} uploading={uploading} />}
       {page === "therapists" && section === "workflow" && <WorkflowEditor elData={elData} enData={enData} setElData={setElData} setEnData={setEnData} />}
       {page === "therapists" && section === "platform" && <PlatformEditor elData={elData} enData={enData} setElData={setElData} setEnData={setEnData} />}
     </div>
@@ -223,14 +217,18 @@ function ImageUpload({ value, onChange, onUpload, uploading }) {
         <div style={{ width: 120, height: 80, borderRadius: 8, border: "1px solid #E2E8F0", background: "#F8FAFC", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 24 }}>📷</div>
       )}
       <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-        <label style={{ background: "#2563EB", color: "#fff", padding: "8px 16px", borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: uploading ? "not-allowed" : "pointer" }}>
-          {uploading ? "⏳..." : "⬆ Upload"}
+        <label style={{ background: "#2563EB", color: "#fff", padding: "8px 16px", borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: uploading ? "not-allowed" : "pointer", display: "inline-block" }}>
+          {uploading ? "⏳ Ανέβασμα..." : "⬆ Upload Εικόνας"}
           <input type="file" accept="image/*" style={{ display: "none" }} disabled={uploading}
             onChange={e => { if (e.target.files[0]) onUpload(e.target.files[0], onChange); }} />
         </label>
-        <input value={value || ""} onChange={e => onChange(e.target.value)} placeholder="ή URL εικόνας..."
-          style={{ padding: "6px 10px", border: "1px solid #E2E8F0", borderRadius: 6, fontSize: 12, width: 200 }} />
-        {value && <button onClick={() => onChange("")} style={{ background: "#FEF2F2", color: "#EF4444", border: "1px solid #FEE2E2", borderRadius: 6, padding: "4px 10px", fontSize: 12, cursor: "pointer" }}>🗑 Αφαίρεση</button>}
+        <input value={value || ""} onChange={e => onChange(e.target.value)} placeholder="ή βάλε URL εικόνας..."
+          style={{ padding: "6px 10px", border: "1px solid #E2E8F0", borderRadius: 6, fontSize: 12, width: 220 }} />
+        {value && (
+          <button onClick={() => onChange("")} style={{ background: "#FEF2F2", color: "#EF4444", border: "1px solid #FEE2E2", borderRadius: 6, padding: "4px 10px", fontSize: 12, cursor: "pointer" }}>
+            🗑 Αφαίρεση
+          </button>
+        )}
       </div>
     </div>
   );
@@ -281,7 +279,6 @@ function HeroEditor({ elData, enData, setElData, setEnData, onUpload, uploading 
   const data = lang === "el" ? elData : enData;
   const setData = lang === "el" ? setElData : setEnData;
   const upd = (key, val) => setData(prev => ({ ...prev, [key]: val }));
-
   return (
     <div>
       <LangTabs active={lang} onChange={setLang} />
@@ -306,7 +303,6 @@ function WhyUsEditor({ elData, enData, setElData, setEnData }) {
   const data = lang === "el" ? elData : enData;
   const setData = lang === "el" ? setElData : setEnData;
   const upd = (key, val) => setData(prev => ({ ...prev, [key]: val }));
-
   return (
     <div>
       <LangTabs active={lang} onChange={setLang} />
@@ -324,7 +320,6 @@ function HowItWorksEditor({ elData, enData, setElData, setEnData }) {
   const data = lang === "el" ? elData : enData;
   const setData = lang === "el" ? setElData : setEnData;
   const upd = (key, val) => setData(prev => ({ ...prev, [key]: val }));
-
   return (
     <div>
       <LangTabs active={lang} onChange={setLang} />
@@ -343,14 +338,15 @@ function BenefitsEditor({ elData, enData, setElData, setEnData, onUpload, upload
   const data = lang === "el" ? elData : enData;
   const setData = lang === "el" ? setElData : setEnData;
   const upd = (key, val) => setData(prev => ({ ...prev, [key]: val }));
-
   return (
     <div>
       <LangTabs active={lang} onChange={setLang} />
       <Field label="Τίτλος"><Input value={data.title} onChange={v => upd("title", v)} /></Field>
       <Field label="Τίτλος (italic)"><Input value={data.titleEm} onChange={v => upd("titleEm", v)} /></Field>
       <Field label="Περιγραφή"><Textarea value={data.desc} onChange={v => upd("desc", v)} /></Field>
-      <Field label="Εικόνα"><ImageUpload value={data.image_url} onChange={v => upd("image_url", v)} onUpload={onUpload} uploading={uploading} /></Field>
+      <Field label="Εικόνα">
+        <ImageUpload value={data.image_url} onChange={v => upd("image_url", v)} onUpload={onUpload} uploading={uploading} />
+      </Field>
       <div style={{ fontSize: 13, fontWeight: 700, color: "#0F172A", marginBottom: 12 }}>Benefits</div>
       <CardList items={data.benefits} onChange={v => upd("benefits", v)} fields={[{ key: "icon", label: "Icon" }, { key: "title", label: "Τίτλος" }, { key: "desc", label: "Περιγραφή", type: "textarea" }]} />
     </div>
@@ -367,7 +363,6 @@ function ServicesEditor({ elData, enData, setElData, setEnData, onUpload, upload
     services[i] = { ...services[i], [key]: val };
     upd("services", services);
   };
-
   return (
     <div>
       <LangTabs active={lang} onChange={setLang} />
@@ -381,7 +376,9 @@ function ServicesEditor({ elData, enData, setElData, setEnData, onUpload, upload
           <Field label="Τίτλος"><Input value={s.title} onChange={v => updService(i, "title", v)} /></Field>
           <Field label="Περιγραφή"><Textarea value={s.desc} onChange={v => updService(i, "desc", v)} rows={2} /></Field>
           <Field label="Τιμή"><Input value={s.price} onChange={v => updService(i, "price", v)} /></Field>
-          <Field label="Εικόνα"><ImageUpload value={s.image_url} onChange={v => updService(i, "image_url", v)} onUpload={onUpload} uploading={uploading} /></Field>
+          <Field label="Εικόνα">
+            <ImageUpload value={s.image_url} onChange={v => updService(i, "image_url", v)} onUpload={onUpload} uploading={uploading} />
+          </Field>
         </div>
       ))}
     </div>
@@ -400,7 +397,6 @@ function FaqEditor({ elData, enData, setElData, setEnData }) {
   };
   const addFaq = () => upd("faqs", [...(data.faqs || []), { q: "", a: "" }]);
   const removeFaq = (i) => upd("faqs", (data.faqs || []).filter((_, idx) => idx !== i));
-
   return (
     <div>
       <LangTabs active={lang} onChange={setLang} />
@@ -430,7 +426,6 @@ function ServicesHeroEditor({ elData, enData, setElData, setEnData }) {
   const data = lang === "el" ? elData : enData;
   const setData = lang === "el" ? setElData : setEnData;
   const upd = (key, val) => setData(prev => ({ ...prev, [key]: val }));
-
   return (
     <div>
       <LangTabs active={lang} onChange={setLang} />
@@ -452,7 +447,6 @@ function TherapistsHeroEditor({ elData, enData, setElData, setEnData }) {
   const data = lang === "el" ? elData : enData;
   const setData = lang === "el" ? setElData : setEnData;
   const upd = (key, val) => setData(prev => ({ ...prev, [key]: val }));
-
   return (
     <div>
       <LangTabs active={lang} onChange={setLang} />
@@ -465,18 +459,20 @@ function TherapistsHeroEditor({ elData, enData, setElData, setEnData }) {
   );
 }
 
-function WhyWorkEditor({ elData, enData, setElData, setEnData }) {
+function WhyWorkEditor({ elData, enData, setElData, setEnData, onUpload, uploading }) {
   const [lang, setLang] = useState("el");
   const data = lang === "el" ? elData : enData;
   const setData = lang === "el" ? setElData : setEnData;
   const upd = (key, val) => setData(prev => ({ ...prev, [key]: val }));
-
   return (
     <div>
       <LangTabs active={lang} onChange={setLang} />
       <Field label="Τίτλος"><Input value={data.title} onChange={v => upd("title", v)} /></Field>
       <Field label="Τίτλος (italic)"><Input value={data.titleEm} onChange={v => upd("titleEm", v)} /></Field>
       <Field label="Περιγραφή"><Textarea value={data.desc} onChange={v => upd("desc", v)} /></Field>
+      <Field label="Εικόνα (κεντρική φωτογραφία)">
+        <ImageUpload value={data.image_url} onChange={v => upd("image_url", v)} onUpload={onUpload} uploading={uploading} />
+      </Field>
       <div style={{ fontSize: 13, fontWeight: 700, color: "#0F172A", marginBottom: 12 }}>Benefits</div>
       <CardList items={data.benefits} onChange={v => upd("benefits", v)} fields={[{ key: "title", label: "Τίτλος" }, { key: "desc", label: "Περιγραφή", type: "textarea" }]} />
     </div>
@@ -488,7 +484,6 @@ function WorkflowEditor({ elData, enData, setElData, setEnData }) {
   const data = lang === "el" ? elData : enData;
   const setData = lang === "el" ? setElData : setEnData;
   const upd = (key, val) => setData(prev => ({ ...prev, [key]: val }));
-
   return (
     <div>
       <LangTabs active={lang} onChange={setLang} />
@@ -507,7 +502,6 @@ function PlatformEditor({ elData, enData, setElData, setEnData }) {
   const data = lang === "el" ? elData : enData;
   const setData = lang === "el" ? setElData : setEnData;
   const upd = (key, val) => setData(prev => ({ ...prev, [key]: val }));
-
   return (
     <div>
       <LangTabs active={lang} onChange={setLang} />
