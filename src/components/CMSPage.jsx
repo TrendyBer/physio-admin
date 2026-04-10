@@ -11,6 +11,7 @@ const PAGES = [
   { id: "homepage", label: "🏠 Homepage" },
   { id: "services", label: "⚕️ Υπηρεσίες" },
   { id: "therapists", label: "👨‍⚕️ Θεραπευτές" },
+  { id: "howitworks", label: "⚙️ How It Works" },
 ];
 
 const SECTIONS = {
@@ -30,6 +31,15 @@ const SECTIONS = {
     { id: "whywork", label: "Why Work With Us" },
     { id: "workflow", label: "Workflow Steps" },
     { id: "platform", label: "Platform" },
+  ],
+  howitworks: [
+    { id: "hero", label: "Hero" },
+    { id: "steps", label: "Steps" },
+    { id: "whypatients", label: "Why Patients Choose Us" },
+    { id: "whyhome", label: "Why Home Based" },
+    { id: "comparison", label: "Comparison Table" },
+    { id: "cta", label: "CTA Banner" },
+    { id: "faq", label: "FAQ" },
   ],
 };
 
@@ -166,6 +176,7 @@ function SectionEditor({ page, section, content, onSave, onUpload, saving, uploa
         </div>
       </div>
 
+      {/* HOMEPAGE */}
       {page === "homepage" && section === "hero" && <HeroEditor elData={elData} enData={enData} setElData={setElData} setEnData={setEnData} onUpload={onUpload} uploading={uploading} />}
       {page === "homepage" && section === "whyus" && <WhyUsEditor elData={elData} enData={enData} setElData={setElData} setEnData={setEnData} />}
       {page === "homepage" && section === "howitworks" && <HowItWorksEditor elData={elData} enData={enData} setElData={setElData} setEnData={setEnData} />}
@@ -173,12 +184,23 @@ function SectionEditor({ page, section, content, onSave, onUpload, saving, uploa
       {page === "homepage" && section === "services" && <ServicesEditor elData={elData} enData={enData} setElData={setElData} setEnData={setEnData} onUpload={onUpload} uploading={uploading} />}
       {page === "homepage" && section === "faq" && <FaqEditor elData={elData} enData={enData} setElData={setElData} setEnData={setEnData} />}
 
+      {/* SERVICES PAGE */}
       {page === "services" && section === "hero" && <ServicesHeroEditor elData={elData} enData={enData} setElData={setElData} setEnData={setEnData} />}
 
+      {/* THERAPISTS PAGE */}
       {page === "therapists" && section === "hero" && <TherapistsHeroEditor elData={elData} enData={enData} setElData={setElData} setEnData={setEnData} />}
       {page === "therapists" && section === "whywork" && <WhyWorkEditor elData={elData} enData={enData} setElData={setElData} setEnData={setEnData} onUpload={onUpload} uploading={uploading} />}
       {page === "therapists" && section === "workflow" && <WorkflowEditor elData={elData} enData={enData} setElData={setElData} setEnData={setEnData} />}
       {page === "therapists" && section === "platform" && <PlatformEditor elData={elData} enData={enData} setElData={setElData} setEnData={setEnData} />}
+
+      {/* HOW IT WORKS PAGE */}
+      {page === "howitworks" && section === "hero" && <HIWHeroEditor elData={elData} enData={enData} setElData={setElData} setEnData={setEnData} />}
+      {page === "howitworks" && section === "steps" && <HIWStepsEditor elData={elData} enData={enData} setElData={setElData} setEnData={setEnData} />}
+      {page === "howitworks" && section === "whypatients" && <HIWWhyPatientsEditor elData={elData} enData={enData} setElData={setElData} setEnData={setEnData} onUpload={onUpload} uploading={uploading} />}
+      {page === "howitworks" && section === "whyhome" && <HIWWhyHomeEditor elData={elData} enData={enData} setElData={setElData} setEnData={setEnData} onUpload={onUpload} uploading={uploading} />}
+      {page === "howitworks" && section === "comparison" && <HIWComparisonEditor elData={elData} enData={enData} setElData={setElData} setEnData={setEnData} />}
+      {page === "howitworks" && section === "cta" && <HIWCtaEditor elData={elData} enData={enData} setElData={setElData} setEnData={setEnData} />}
+      {page === "howitworks" && section === "faq" && <HIWFaqEditor elData={elData} enData={enData} setElData={setElData} setEnData={setEnData} />}
     </div>
   );
 }
@@ -510,6 +532,192 @@ function PlatformEditor({ elData, enData, setElData, setEnData }) {
       <Field label="Περιγραφή"><Textarea value={data.desc} onChange={v => upd("desc", v)} /></Field>
       <div style={{ fontSize: 13, fontWeight: 700, color: "#0F172A", marginBottom: 12 }}>Points</div>
       <CardList items={data.points} onChange={v => upd("points", v)} fields={[{ key: "title", label: "Τίτλος" }, { key: "desc", label: "Περιγραφή", type: "textarea" }]} />
+    </div>
+  );
+}
+
+// ─── HOW IT WORKS PAGE EDITORS ────────────────────────────────────────────────
+
+function HIWHeroEditor({ elData, enData, setElData, setEnData }) {
+  const [lang, setLang] = useState("el");
+  const data = lang === "el" ? elData : enData;
+  const setData = lang === "el" ? setElData : setEnData;
+  const upd = (key, val) => setData(prev => ({ ...prev, [key]: val }));
+  return (
+    <div>
+      <LangTabs active={lang} onChange={setLang} />
+      <Field label="Badge"><Input value={data.badge} onChange={v => upd("badge", v)} /></Field>
+      <Field label="Τίτλος (μέρος 1)"><Input value={data.heroTitle} onChange={v => upd("heroTitle", v)} /></Field>
+      <Field label="Τίτλος (italic)"><Input value={data.heroTitleEm} onChange={v => upd("heroTitleEm", v)} /></Field>
+      <Field label="Περιγραφή"><Textarea value={data.heroDesc} onChange={v => upd("heroDesc", v)} /></Field>
+      <Field label="Κουμπί"><Input value={data.heroBtn} onChange={v => upd("heroBtn", v)} /></Field>
+      <Field label="Badges (χωρισμένα με |)">
+        <Input value={(data.heroBadges || []).join(" | ")} onChange={v => upd("heroBadges", v.split(" | "))} />
+      </Field>
+    </div>
+  );
+}
+
+function HIWStepsEditor({ elData, enData, setElData, setEnData }) {
+  const [lang, setLang] = useState("el");
+  const data = lang === "el" ? elData : enData;
+  const setData = lang === "el" ? setElData : setEnData;
+  const upd = (key, val) => setData(prev => ({ ...prev, [key]: val }));
+  return (
+    <div>
+      <LangTabs active={lang} onChange={setLang} />
+      <Field label="Τίτλος"><Input value={data.stepsTitle} onChange={v => upd("stepsTitle", v)} /></Field>
+      <Field label="Τίτλος (italic)"><Input value={data.stepsTitleEm} onChange={v => upd("stepsTitleEm", v)} /></Field>
+      <Field label="Περιγραφή"><Textarea value={data.stepsDesc} onChange={v => upd("stepsDesc", v)} /></Field>
+      <Field label="Κουμπί"><Input value={data.stepsBtn} onChange={v => upd("stepsBtn", v)} /></Field>
+      <div style={{ fontSize: 13, fontWeight: 700, color: "#0F172A", marginBottom: 12 }}>Steps</div>
+      <CardList
+        items={data.steps}
+        onChange={v => upd("steps", v)}
+        fields={[
+          { key: "num", label: "Label (π.χ. Step 1)" },
+          { key: "title", label: "Τίτλος" },
+          { key: "desc", label: "Περιγραφή", type: "textarea" },
+        ]}
+      />
+    </div>
+  );
+}
+
+function HIWWhyPatientsEditor({ elData, enData, setElData, setEnData, onUpload, uploading }) {
+  const [lang, setLang] = useState("el");
+  const data = lang === "el" ? elData : enData;
+  const setData = lang === "el" ? setElData : setEnData;
+  const upd = (key, val) => setData(prev => ({ ...prev, [key]: val }));
+  return (
+    <div>
+      <LangTabs active={lang} onChange={setLang} />
+      <Field label="Τίτλος"><Input value={data.whyTitle} onChange={v => upd("whyTitle", v)} /></Field>
+      <Field label="Τίτλος (italic)"><Input value={data.whyTitleEm} onChange={v => upd("whyTitleEm", v)} /></Field>
+      <Field label="Περιγραφή"><Textarea value={data.whyDesc} onChange={v => upd("whyDesc", v)} /></Field>
+      <Field label="Κεντρική Εικόνα (3/4 ratio)">
+        <ImageUpload value={data.image_url} onChange={v => upd("image_url", v)} onUpload={onUpload} uploading={uploading} />
+      </Field>
+      <div style={{ fontSize: 13, fontWeight: 700, color: "#0F172A", marginBottom: 12 }}>Points (3 συνολικά)</div>
+      <CardList
+        items={data.whyPoints}
+        onChange={v => upd("whyPoints", v)}
+        fields={[
+          { key: "icon", label: "Icon (emoji)" },
+          { key: "title", label: "Τίτλος" },
+          { key: "desc", label: "Περιγραφή", type: "textarea" },
+        ]}
+      />
+    </div>
+  );
+}
+
+function HIWWhyHomeEditor({ elData, enData, setElData, setEnData, onUpload, uploading }) {
+  const [lang, setLang] = useState("el");
+  const data = lang === "el" ? elData : enData;
+  const setData = lang === "el" ? setElData : setEnData;
+  const upd = (key, val) => setData(prev => ({ ...prev, [key]: val }));
+  return (
+    <div>
+      <LangTabs active={lang} onChange={setLang} />
+      <Field label="Τίτλος"><Input value={data.homeTitle} onChange={v => upd("homeTitle", v)} /></Field>
+      <Field label="Τίτλος (italic)"><Input value={data.homeTitleEm} onChange={v => upd("homeTitleEm", v)} /></Field>
+      <Field label="Περιγραφή"><Textarea value={data.homeDesc} onChange={v => upd("homeDesc", v)} /></Field>
+      <Field label="Εικόνα (δεξιά, 4/3 ratio)">
+        <ImageUpload value={data.image_url} onChange={v => upd("image_url", v)} onUpload={onUpload} uploading={uploading} />
+      </Field>
+      <div style={{ fontSize: 13, fontWeight: 700, color: "#0F172A", marginBottom: 12 }}>Points (4 cards)</div>
+      <CardList
+        items={data.homePoints}
+        onChange={v => upd("homePoints", v)}
+        fields={[
+          { key: "title", label: "Τίτλος" },
+          { key: "desc", label: "Περιγραφή", type: "textarea" },
+        ]}
+      />
+    </div>
+  );
+}
+
+function HIWComparisonEditor({ elData, enData, setElData, setEnData }) {
+  const [lang, setLang] = useState("el");
+  const data = lang === "el" ? elData : enData;
+  const setData = lang === "el" ? setElData : setEnData;
+  const upd = (key, val) => setData(prev => ({ ...prev, [key]: val }));
+  const updRow = (i, key, val) => {
+    const rows = [...(data.compRows || [])];
+    rows[i] = { ...rows[i], [key]: val };
+    upd("compRows", rows);
+  };
+  return (
+    <div>
+      <LangTabs active={lang} onChange={setLang} />
+      <Field label="Τίτλος"><Input value={data.compTitle} onChange={v => upd("compTitle", v)} /></Field>
+      <Field label="Τίτλος (italic)"><Input value={data.compTitleEm} onChange={v => upd("compTitleEm", v)} /></Field>
+      <Field label="Περιγραφή"><Textarea value={data.compDesc} onChange={v => upd("compDesc", v)} /></Field>
+      <Field label="Κουμπί"><Input value={data.compBtn} onChange={v => upd("compBtn", v)} /></Field>
+      <Field label="Επικεφαλίδα Στήλης 1 (Home)"><Input value={data.compHome} onChange={v => upd("compHome", v)} /></Field>
+      <Field label="Επικεφαλίδα Στήλης 2 (Clinic)"><Input value={data.compClinic} onChange={v => upd("compClinic", v)} /></Field>
+      <div style={{ fontSize: 13, fontWeight: 700, color: "#0F172A", marginBottom: 12 }}>Γραμμές Σύγκρισης</div>
+      {(data.compRows || []).map((row, i) => (
+        <div key={i} style={{ border: "1px solid #E2E8F0", borderRadius: 10, padding: 16, marginBottom: 12 }}>
+          <div style={{ fontSize: 13, fontWeight: 700, color: "#0F172A", marginBottom: 10 }}>Γραμμή {i + 1}</div>
+          <Field label="Label"><Input value={row.label} onChange={v => updRow(i, "label", v)} /></Field>
+          <Field label="Home (μπλε στήλη)"><Input value={row.home} onChange={v => updRow(i, "home", v)} /></Field>
+          <Field label="Clinic (γκρι στήλη)"><Input value={row.clinic} onChange={v => updRow(i, "clinic", v)} /></Field>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function HIWCtaEditor({ elData, enData, setElData, setEnData }) {
+  const [lang, setLang] = useState("el");
+  const data = lang === "el" ? elData : enData;
+  const setData = lang === "el" ? setElData : setEnData;
+  const upd = (key, val) => setData(prev => ({ ...prev, [key]: val }));
+  return (
+    <div>
+      <LangTabs active={lang} onChange={setLang} />
+      <Field label="Τίτλος"><Input value={data.ctaTitle} onChange={v => upd("ctaTitle", v)} /></Field>
+      <Field label="Περιγραφή"><Textarea value={data.ctaDesc} onChange={v => upd("ctaDesc", v)} /></Field>
+      <Field label="Κουμπί"><Input value={data.ctaBtn} onChange={v => upd("ctaBtn", v)} /></Field>
+    </div>
+  );
+}
+
+function HIWFaqEditor({ elData, enData, setElData, setEnData }) {
+  const [lang, setLang] = useState("el");
+  const data = lang === "el" ? elData : enData;
+  const setData = lang === "el" ? setElData : setEnData;
+  const upd = (key, val) => setData(prev => ({ ...prev, [key]: val }));
+  const updFaq = (i, key, val) => {
+    const faqs = [...(data.faqs || [])];
+    faqs[i] = { ...faqs[i], [key]: val };
+    upd("faqs", faqs);
+  };
+  const addFaq = () => upd("faqs", [...(data.faqs || []), { q: "", a: "" }]);
+  const removeFaq = (i) => upd("faqs", (data.faqs || []).filter((_, idx) => idx !== i));
+  return (
+    <div>
+      <LangTabs active={lang} onChange={setLang} />
+      <Field label="Τίτλος"><Input value={data.faqTitle} onChange={v => upd("faqTitle", v)} /></Field>
+      <Field label="Τίτλος (italic)"><Input value={data.faqTitleEm} onChange={v => upd("faqTitleEm", v)} /></Field>
+      <Field label="Περιγραφή"><Textarea value={data.faqDesc} onChange={v => upd("faqDesc", v)} /></Field>
+      <Field label="Κουμπί"><Input value={data.faqBtn} onChange={v => upd("faqBtn", v)} /></Field>
+      {(data.faqs || []).map((faq, i) => (
+        <div key={i} style={{ border: "1px solid #E2E8F0", borderRadius: 10, padding: 16, marginBottom: 12 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 10 }}>
+            <div style={{ fontSize: 13, fontWeight: 700, color: "#0F172A" }}>FAQ {i + 1}</div>
+            <button onClick={() => removeFaq(i)} style={{ background: "#FEF2F2", color: "#EF4444", border: "none", borderRadius: 6, padding: "4px 10px", fontSize: 12, cursor: "pointer" }}>🗑</button>
+          </div>
+          <Field label="Ερώτηση"><Input value={faq.q} onChange={v => updFaq(i, "q", v)} /></Field>
+          <Field label="Απάντηση"><Textarea value={faq.a} onChange={v => updFaq(i, "a", v)} rows={2} /></Field>
+        </div>
+      ))}
+      <button onClick={addFaq} style={{ background: "#EFF6FF", color: "#2563EB", border: "1px solid #BFDBFE", borderRadius: 8, padding: "8px 20px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
+        + Προσθήκη FAQ
+      </button>
     </div>
   );
 }
