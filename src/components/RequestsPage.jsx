@@ -17,10 +17,13 @@ function Avatar({ name, size=40 }) {
 
 function AssignModal({ request, therapists, onClose, onAssign }) {
   const [selected, setSelected] = useState(request.assigned_to || request.preferred_therapist || "");
+
+  const fullAddress = [request.street, request.city, request.zip, request.country].filter(Boolean).join(", ");
+
   return (
     <div style={{ position:"fixed", inset:0, background:"rgba(15,23,42,0.5)", display:"flex", alignItems:"center", justifyContent:"center", zIndex:1000, padding:24 }}
       onClick={e=>{ if(e.target===e.currentTarget) onClose(); }}>
-      <div style={{ background:"#fff", borderRadius:18, width:"100%", maxWidth:580, boxShadow:"0 20px 60px rgba(0,0,0,0.2)" }}>
+      <div style={{ background:"#fff", borderRadius:18, width:"100%", maxWidth:600, maxHeight:"90vh", overflowY:"auto", boxShadow:"0 20px 60px rgba(0,0,0,0.2)" }}>
         <div style={{ padding:"24px 28px 20px", borderBottom:"1px solid #F1F5F9", display:"flex", alignItems:"flex-start", gap:16 }}>
           <Avatar name={request.name} size={48}/>
           <div style={{ flex:1 }}>
@@ -32,7 +35,12 @@ function AssignModal({ request, therapists, onClose, onAssign }) {
                 </span>
               )}
             </div>
-            <div style={{ fontSize:13, color:"#64748B", marginTop:3 }}>{request.phone} · {request.email} · {request.city}</div>
+            <div style={{ fontSize:13, color:"#64748B", marginTop:3 }}>{request.phone} · {request.email}</div>
+            {fullAddress && (
+              <div style={{ fontSize:13, color:"#1D4ED8", marginTop:4, fontWeight:500 }}>
+                📍 {fullAddress}
+              </div>
+            )}
           </div>
           <button onClick={onClose} style={{ background:"none", border:"none", fontSize:20, cursor:"pointer", color:"#94A3B8" }}>✕</button>
         </div>
@@ -88,9 +96,7 @@ export default function RequestsPage() {
   const [filter, setFilter] = useState("all");
   const [search, setSearch] = useState("");
 
-  useEffect(() => {
-    fetchAll();
-  }, []);
+  useEffect(() => { fetchAll(); }, []);
 
   async function fetchAll() {
     setLoading(true);
@@ -128,7 +134,7 @@ export default function RequestsPage() {
 
   const filtered = requests.filter(r => {
     const matchFilter = filter==="all" || r.status===filter;
-    const matchSearch = ((r.name||"")+(r.city||"")+(r.service||"")+(r.description||"")).toLowerCase().includes(search.toLowerCase());
+    const matchSearch = ((r.name||"")+(r.city||"")+(r.street||"")+(r.service||"")+(r.description||"")).toLowerCase().includes(search.toLowerCase());
     return matchFilter && matchSearch;
   });
 
@@ -181,6 +187,7 @@ export default function RequestsPage() {
           </div>
         ) : filtered.map(r => {
           const st = STATUS_MAP[r.status] || STATUS_MAP.pending;
+          const fullAddress = [r.street, r.city, r.zip, r.country].filter(Boolean).join(", ");
           return (
             <div key={r.id} style={{ background:"#fff", borderRadius:14, border:`1px solid ${r.preferred_therapist && r.status==="pending" ? "#FCD34D" : "#E2E8F0"}`, padding:"16px 20px", display:"flex", alignItems:"flex-start", gap:14 }}>
               <Avatar name={r.name}/>
@@ -190,8 +197,18 @@ export default function RequestsPage() {
                   <Badge label={st.label} bg={st.bg} color={st.color}/>
                   {r.preferred_therapist && <Badge label="⭐ Έχει προτίμηση" bg="#FEF3C7" color="#92400E"/>}
                 </div>
-                <div style={{ fontSize:12, color:"#64748B", marginBottom:6 }}>
-                  {r.phone} · {r.email} · {r.city} · {new Date(r.created_at).toLocaleDateString("el-GR")}
+                {/* Contact info */}
+                <div style={{ fontSize:12, color:"#64748B", marginBottom:4 }}>
+                  {r.phone} · {r.email}
+                </div>
+                {/* Full address */}
+                {fullAddress && (
+                  <div style={{ fontSize:12, color:"#1D4ED8", fontWeight:500, marginBottom:6, display:"flex", alignItems:"center", gap:4 }}>
+                    📍 {fullAddress}
+                  </div>
+                )}
+                <div style={{ fontSize:12, color:"#94A3B8", marginBottom:6 }}>
+                  {new Date(r.created_at).toLocaleDateString("el-GR", { day:"2-digit", month:"2-digit", year:"numeric", hour:"2-digit", minute:"2-digit" })}
                 </div>
                 {r.preferred_therapist && (
                   <div style={{ display:"inline-flex", alignItems:"center", gap:6, background:"#FEF3C7", border:"1px solid #FCD34D", borderRadius:8, padding:"6px 12px", fontSize:12, fontWeight:600, color:"#92400E", marginBottom:8 }}>
