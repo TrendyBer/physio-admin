@@ -24,6 +24,7 @@ function AssignModal({ request, therapists, onClose, onAssign }) {
     if (!selected) return;
     setSending(true);
     await onAssign(request.id, selected);
+
     const therapist = therapists.find(t => t.name === selected);
     if (therapist) {
       try {
@@ -62,6 +63,7 @@ function AssignModal({ request, therapists, onClose, onAssign }) {
           </div>
           <button onClick={onClose} style={{ background:"none", border:"none", fontSize:20, cursor:"pointer", color:"#94A3B8" }}>✕</button>
         </div>
+
         <div style={{ padding:"20px 28px", display:"flex", flexDirection:"column", gap:16 }}>
           <div>
             <div style={{ fontSize:12, fontWeight:700, color:"#94A3B8", textTransform:"uppercase", letterSpacing:"0.06em", marginBottom:8 }}>Πρόβλημα Ασθενή</div>
@@ -80,7 +82,9 @@ function AssignModal({ request, therapists, onClose, onAssign }) {
                   <div style={{ flex:1 }}>
                     <div style={{ fontWeight:600, fontSize:14, color:"#0F172A", display:"flex", alignItems:"center", gap:8 }}>
                       {t.name}
-                      {request.preferred_therapist === t.name && <span style={{ background:"#FEF3C7", color:"#92400E", padding:"1px 8px", borderRadius:999, fontSize:10, fontWeight:700 }}>⭐ Προτίμηση</span>}
+                      {request.preferred_therapist === t.name && (
+                        <span style={{ background:"#FEF3C7", color:"#92400E", padding:"1px 8px", borderRadius:999, fontSize:10, fontWeight:700 }}>⭐ Προτίμηση</span>
+                      )}
                     </div>
                     <div style={{ fontSize:12, color:"#64748B" }}>{t.specialty}</div>
                   </div>
@@ -89,11 +93,13 @@ function AssignModal({ request, therapists, onClose, onAssign }) {
               ))}
             </div>
           </div>
+
           {selected && (
             <div style={{ background:"#F0FDF4", border:"1px solid #BBF7D0", borderRadius:8, padding:"10px 14px", fontSize:13, color:"#15803D" }}>
-              ✉️ Θα σταλούν αυτόματα emails επιβεβαίωσης στον ασθενή και τον θεραπευτή.
+              ✉️ Θα σταλούν emails επιβεβαίωσης · 💳 Θα δημιουργηθεί εγγραφή πληρωμής αυτόματα
             </div>
           )}
+
           <div style={{ display:"flex", gap:10, paddingTop:4, borderTop:"1px solid #F1F5F9" }}>
             <button onClick={handleAssign} disabled={!selected || sending}
               style={{ flex:1, padding:"10px 0", borderRadius:8, border:"none", background:selected&&!sending?"#1D4ED8":"#E2E8F0", color:selected&&!sending?"#fff":"#94A3B8", fontSize:14, fontWeight:600, cursor:selected&&!sending?"pointer":"not-allowed", fontFamily:"inherit" }}>
@@ -129,8 +135,29 @@ export default function RequestsPage() {
   }
 
   async function assignTherapist(id, therapistName) {
-    const { error } = await supabase.from("requests").update({ assigned_to: therapistName, status: "active" }).eq("id", id);
-    if (!error) await fetchAll();
+    // Update request
+    const { error } = await supabase
+      .from("requests")
+      .update({ assigned_to: therapistName, status: "active" })
+      .eq("id", id);
+
+    if (!error) {
+      // Find therapist id
+      const therapist = therapists.find(t => t.name === therapistName);
+      const request = requests.find(r => r.id === id);
+
+      // Auto-create payment entry
+      if (therapist && request) {
+        await supabase.from("payments").insert([{
+          therapist_id:  therapist.id,
+          request_id:    id,
+          patient_name:  request.name,
+          paid:          false,
+        }]);
+      }
+
+      await fetchAll();
+    }
   }
 
   async function updateStatus(id, newStatus) {
@@ -139,9 +166,9 @@ export default function RequestsPage() {
   }
 
   const counts = {
-    all: requests.length,
-    pending: requests.filter(r=>r.status==="pending").length,
-    active: requests.filter(r=>r.status==="active").length,
+    all:       requests.length,
+    pending:   requests.filter(r=>r.status==="pending").length,
+    active:    requests.filter(r=>r.status==="active").length,
     completed: requests.filter(r=>r.status==="completed").length,
   };
 
@@ -151,7 +178,11 @@ export default function RequestsPage() {
     return matchFilter && matchSearch;
   });
 
-  if (loading) return <div style={{ padding:24, display:"flex", alignItems:"center", justifyContent:"center", minHeight:400 }}><div style={{ fontSize:16, color:"#64748B" }}>Φόρτωση αιτημάτων...</div></div>;
+  if (loading) return (
+    <div style={{ padding:24, display:"flex", alignItems:"center", justifyContent:"center", minHeight:400 }}>
+      <div style={{ fontSize:16, color:"#64748B" }}>Φόρτωση αιτημάτων...</div>
+    </div>
+  );
 
   return (
     <div>
@@ -159,12 +190,13 @@ export default function RequestsPage() {
         <h1 style={{ fontSize:26, fontWeight:700, color:"#0F172A", margin:0 }}>Αιτήματα</h1>
         <p style={{ fontSize:13, color:"#94A3B8", marginTop:4 }}>Διαχείριση όλων των αιτημάτων ασθενών</p>
       </div>
+
       <div style={{ display:"flex", gap:14, marginBottom:24, flexWrap:"wrap" }}>
         {[
-          { label:"Εκκρεμή", value:counts.pending, bg:"#FFFBEB", border:"#FDE68A", text:"#B45309" },
-          { label:"Ενεργά", value:counts.active, bg:"#EFF6FF", border:"#BFDBFE", text:"#1D4ED8" },
+          { label:"Εκκρεμή",      value:counts.pending,   bg:"#FFFBEB", border:"#FDE68A", text:"#B45309" },
+          { label:"Ενεργά",       value:counts.active,    bg:"#EFF6FF", border:"#BFDBFE", text:"#1D4ED8" },
           { label:"Ολοκλ/θηκαν", value:counts.completed, bg:"#F0FDF4", border:"#BBF7D0", text:"#15803D" },
-          { label:"Συνολικά", value:counts.all, bg:"#F8FAFC", border:"#E2E8F0", text:"#475569" },
+          { label:"Συνολικά",     value:counts.all,       bg:"#F8FAFC", border:"#E2E8F0", text:"#475569" },
         ].map(c => (
           <div key={c.label} style={{ flex:1, minWidth:120, background:c.bg, border:`1px solid ${c.border}`, borderRadius:12, padding:"16px 20px" }}>
             <div style={{ fontSize:11, fontWeight:700, color:c.text, textTransform:"uppercase", letterSpacing:"0.05em" }}>{c.label}</div>
@@ -172,6 +204,7 @@ export default function RequestsPage() {
           </div>
         ))}
       </div>
+
       <div style={{ display:"flex", gap:12, marginBottom:20, alignItems:"center", flexWrap:"wrap" }}>
         <div style={{ display:"flex", gap:4, background:"#E2E8F0", padding:4, borderRadius:10 }}>
           {[["all","Όλα"],["pending","Εκκρεμή"],["active","Ενεργά"],["completed","Ολοκλ/θηκαν"]].map(([val,label])=>(
@@ -183,6 +216,7 @@ export default function RequestsPage() {
         <input type="text" placeholder="Αναζήτηση..." value={search} onChange={e=>setSearch(e.target.value)}
           style={{ flex:1, minWidth:200, padding:"9px 14px", borderRadius:8, border:"1px solid #E2E8F0", fontSize:13, fontFamily:"inherit", background:"#fff", outline:"none", color:"#0F172A" }}/>
       </div>
+
       <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
         {filtered.length===0 ? (
           <div style={{ padding:40, textAlign:"center", color:"#94A3B8", fontSize:14, background:"#fff", borderRadius:14, border:"1px solid #E2E8F0" }}>
@@ -233,7 +267,15 @@ export default function RequestsPage() {
           );
         })}
       </div>
-      {selected && <AssignModal request={selected} therapists={therapists} onClose={()=>setSelected(null)} onAssign={assignTherapist}/>}
+
+      {selected && (
+        <AssignModal
+          request={selected}
+          therapists={therapists}
+          onClose={()=>setSelected(null)}
+          onAssign={assignTherapist}
+        />
+      )}
     </div>
   );
 }
