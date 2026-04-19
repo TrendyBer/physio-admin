@@ -1,7 +1,6 @@
 "use client";
 import { useState } from "react";
 
-// ── IMPORT ALL PAGES ──────────────────────────────────────
 import AdminDashboard from "./AdminDashboard";
 import TherapistsPage from "./TherapistsPage";
 import PatientsPage from "./PatientsPage";
@@ -13,8 +12,8 @@ import ReportsPage from "./ReportsPage";
 import SettingsPage from "./SettingsPage";
 import BlogPage from "./BlogPage";
 import CMSPage from "./CMSPage";
+import PackagesPage from "./PackagesPage";
 
-// ── PLACEHOLDER ───────────────────────────────────────────
 function ComingSoon({ title }) {
   return (
     <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", minHeight: 400, gap: 12 }}>
@@ -25,12 +24,12 @@ function ComingSoon({ title }) {
   );
 }
 
-// ── NAV ITEMS ─────────────────────────────────────────────
 const NAV_ITEMS = [
   { id: "dashboard",  label: "Dashboard",           icon: "◈" },
   { id: "therapists", label: "Φυσιοθεραπευτές",    icon: "⊕" },
   { id: "patients",   label: "Χρήστες / Ασθενείς", icon: "◉" },
   { id: "requests",   label: "Αιτήματα",            icon: "◫" },
+  { id: "packages",   label: "📦 Πακέτα",           icon: "📦" },
   { id: "payments",   label: "Πληρωμές",            icon: "◈" },
   { id: "reviews",    label: "Reviews",             icon: "◇" },
   { id: "categories", label: "Κατηγορίες",          icon: "⊞" },
@@ -40,7 +39,6 @@ const NAV_ITEMS = [
   { id: "cms",        label: "🎨 CMS Site",         icon: "🎨" },
 ];
 
-// ── SIDEBAR ───────────────────────────────────────────────
 function Sidebar({ activePage, onNavigate }) {
   return (
     <aside style={{
@@ -51,7 +49,6 @@ function Sidebar({ activePage, onNavigate }) {
       position: "sticky", top: 0,
       flexShrink: 0,
     }}>
-      {/* Logo */}
       <div style={{ padding: "28px 24px 20px", borderBottom: "1px solid rgba(255,255,255,0.07)" }}>
         <div style={{ fontSize: 18, fontWeight: 700, color: "#F1F5F9", letterSpacing: "-0.02em" }}>
           Physio<span style={{ color: "#38BDF8" }}>Admin</span>
@@ -59,7 +56,6 @@ function Sidebar({ activePage, onNavigate }) {
         <div style={{ fontSize: 11, color: "#475569", marginTop: 2 }}>Marketplace Panel</div>
       </div>
 
-      {/* Nav */}
       <nav style={{ padding: "16px 12px", flex: 1 }}>
         {NAV_ITEMS.map(item => {
           const isActive = activePage === item.id;
@@ -89,7 +85,6 @@ function Sidebar({ activePage, onNavigate }) {
         })}
       </nav>
 
-      {/* Admin user */}
       <div style={{ margin: "0 12px", padding: "10px 14px", borderRadius: 10, background: "rgba(255,255,255,0.05)" }}>
         <div style={{ fontSize: 12, fontWeight: 600, color: "#CBD5E1" }}>Admin</div>
         <div style={{ fontSize: 11, color: "#475569" }}>you@physio.gr</div>
@@ -98,7 +93,6 @@ function Sidebar({ activePage, onNavigate }) {
   );
 }
 
-// ── MAIN LAYOUT ───────────────────────────────────────────
 export default function AdminLayout() {
   const [activePage, setActivePage] = useState("dashboard");
 
@@ -108,6 +102,7 @@ export default function AdminLayout() {
       case "therapists": return <TherapistsPage onNavigate={setActivePage} />;
       case "patients":   return <PatientsPage />;
       case "requests":   return <RequestsPage />;
+      case "packages":   return <PackagesPage />;
       case "payments":   return <PaymentsPage />;
       case "reviews":    return <ReviewsPage />;
       case "categories": return <CategoriesPage />;
@@ -122,9 +117,7 @@ export default function AdminLayout() {
   return (
     <div style={{ minHeight: "100vh", background: "#F8FAFC", fontFamily: "'DM Sans', sans-serif", display: "flex" }}>
       <style>{`@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=DM+Serif+Display&display=swap');`}</style>
-
       <Sidebar activePage={activePage} onNavigate={setActivePage} />
-
       <main style={{ flex: 1, padding: "32px 36px", minWidth: 0 }}>
         {renderPage()}
       </main>
