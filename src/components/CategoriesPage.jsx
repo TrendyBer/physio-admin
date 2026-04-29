@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { createClientComponentClient } from "@supabase/auth-helpers-nextjs";
+import { supabase } from "../lib/supabase";
 
 const COLOR_PRESETS = [
   { color: "#1D4ED8", bg: "#EFF6FF", label: "Μπλε" },
@@ -15,8 +15,6 @@ const COLOR_PRESETS = [
 ];
 
 export default function CategoriesPage() {
-  const supabase = createClientComponentClient();
-
   const [specialties, setSpecialties] = useState([]);
   const [therapistCounts, setTherapistCounts] = useState({});
   const [loading, setLoading] = useState(true);
@@ -215,6 +213,7 @@ export default function CategoriesPage() {
             fontWeight: 600,
             cursor: "pointer",
             boxShadow: "0 2px 8px rgba(56,189,248,0.3)",
+            fontFamily: "inherit",
           }}
         >
           + Νέα Ειδικότητα
@@ -423,6 +422,7 @@ export default function CategoriesPage() {
                         fontSize: 13,
                         fontWeight: 600,
                         cursor: "pointer",
+                        fontFamily: "inherit",
                       }}
                     >
                       ✏️ Επεξ.
@@ -439,6 +439,7 @@ export default function CategoriesPage() {
                         fontSize: 13,
                         fontWeight: 600,
                         cursor: "pointer",
+                        fontFamily: "inherit",
                       }}
                     >
                       {item.is_active ? "⏸️ Παύση" : "▶️ Ενεργ."}
@@ -454,6 +455,7 @@ export default function CategoriesPage() {
                         fontSize: 13,
                         fontWeight: 600,
                         cursor: "pointer",
+                        fontFamily: "inherit",
                       }}
                     >
                       🗑️
@@ -529,6 +531,7 @@ export default function CategoriesPage() {
                   borderRadius: 10,
                   fontSize: 15,
                   outline: "none",
+                  fontFamily: "inherit",
                 }}
               />
             </div>
@@ -600,6 +603,7 @@ export default function CategoriesPage() {
                       fontSize: 12,
                       fontWeight: 600,
                       color: preset.color,
+                      fontFamily: "inherit",
                     }}
                   >
                     {preset.label}
@@ -640,6 +644,7 @@ export default function CategoriesPage() {
                     borderRadius: 10,
                     fontSize: 15,
                     outline: "none",
+                    fontFamily: "inherit",
                   }}
                 />
               </div>
@@ -667,6 +672,7 @@ export default function CategoriesPage() {
                     background: isActive ? "#DCFCE7" : "#F1F5F9",
                     color: isActive ? "#15803D" : "#64748B",
                     cursor: "pointer",
+                    fontFamily: "inherit",
                   }}
                 >
                   {isActive ? "● Ενεργή" : "○ Ανενεργή"}
@@ -694,6 +700,7 @@ export default function CategoriesPage() {
                   fontWeight: 600,
                   color: "#475569",
                   cursor: "pointer",
+                  fontFamily: "inherit",
                 }}
               >
                 Άκυρο
@@ -711,6 +718,7 @@ export default function CategoriesPage() {
                   color: "white",
                   cursor: saving ? "not-allowed" : "pointer",
                   opacity: saving ? 0.6 : 1,
+                  fontFamily: "inherit",
                 }}
               >
                 {saving ? "Αποθήκευση..." : "💾 Αποθήκευση"}
