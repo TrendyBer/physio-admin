@@ -1,298 +1,719 @@
 "use client";
-import { useState, useEffect } from "react";
-import { supabase } from "../lib/supabase";
 
-const COLORS = [
-  { color:"#1D4ED8", bg:"#EFF6FF", label:"Μπλε" },
-  { color:"#7E22CE", bg:"#FAF5FF", label:"Μωβ" },
-  { color:"#15803D", bg:"#F0FDF4", label:"Πράσινο" },
-  { color:"#C2410C", bg:"#FFF7ED", label:"Πορτοκαλί" },
-  { color:"#0F766E", bg:"#F0FDFA", label:"Τιρκουάζ" },
-  { color:"#BE123C", bg:"#FFF1F2", label:"Κόκκινο" },
-  { color:"#475569", bg:"#F8FAFC", label:"Γκρι" },
-  { color:"#BE185D", bg:"#FDF2F8", label:"Ροζ" },
+import { useEffect, useState } from "react";
+import { createClientComponentClient } from "@supabase/auth-helpers-nextjs";
+
+const COLOR_PRESETS = [
+  { color: "#1D4ED8", bg: "#EFF6FF", label: "Μπλε" },
+  { color: "#7E22CE", bg: "#FAF5FF", label: "Μωβ" },
+  { color: "#15803D", bg: "#F0FDF4", label: "Πράσινο" },
+  { color: "#C2410C", bg: "#FFF7ED", label: "Πορτοκαλί" },
+  { color: "#0F766E", bg: "#F0FDFA", label: "Τιρκουάζ" },
+  { color: "#BE123C", bg: "#FFF1F2", label: "Κόκκινο" },
+  { color: "#475569", bg: "#F8FAFC", label: "Γκρι" },
+  { color: "#BE185D", bg: "#FDF2F8", label: "Ροζ" },
 ];
 
-const EMPTY = { name:"", description:"", color:"#1D4ED8", bg:"#EFF6FF", display_order:0 };
-
-function Badge({ label, bg, color }) {
-  return <span style={{ background:bg, color, padding:"2px 10px", borderRadius:999, fontSize:11, fontWeight:700, letterSpacing:"0.04em", textTransform:"uppercase" }}>{label}</span>;
-}
-
 export default function CategoriesPage() {
-  const [categories, setCategories] = useState([]);
+  const supabase = createClientComponentClient();
+
+  const [specialties, setSpecialties] = useState([]);
   const [therapistCounts, setTherapistCounts] = useState({});
   const [loading, setLoading] = useState(true);
-  const [showForm, setShowForm] = useState(false);
-  const [editId, setEditId] = useState(null);
-  const [form, setForm] = useState(EMPTY);
+  const [showModal, setShowModal] = useState(false);
+  const [editing, setEditing] = useState(null);
+
+  // Form state
+  const [name, setName] = useState("");
+  const [description, setDescription] = useState("");
+  const [colorIdx, setColorIdx] = useState(0);
+  const [isActive, setIsActive] = useState(true);
+  const [displayOrder, setDisplayOrder] = useState(0);
   const [saving, setSaving] = useState(false);
-  const [deleteConfirm, setDeleteConfirm] = useState(null);
 
-  useEffect(() => { fetchAll(); }, []);
+  useEffect(() => {
+    loadAll();
+  }, []);
 
-  async function fetchAll() {
+  async function loadAll() {
     setLoading(true);
-    const [{ data: cats }, { data: therapists }] = await Promise.all([
-      supabase.from("specialties").select("*").order("display_order"),
-      supabase.from("therapist_profiles").select("specialty").eq("is_approved", true),
-    ]);
-
-    // Count therapists per specialty
-    const counts = {};
-    (therapists || []).forEach(t => {
-      if (t.specialty) counts[t.specialty] = (counts[t.specialty] || 0) + 1;
-    });
-
-    setCategories(cats || []);
-    setTherapistCounts(counts);
+    await Promise.all([loadSpecialties(), loadTherapistCounts()]);
     setLoading(false);
   }
 
-  function openAdd() {
-    setEditId(null);
-    setForm({ ...EMPTY, display_order: categories.length + 1 });
-    setShowForm(true);
+  async function loadSpecialties() {
+    const { data, error } = await supabase
+      .from("specialties")
+      .select("*")
+      .order("display_order", { ascending: true });
+
+    if (error) {
+      console.error("Error loading specialties:", error);
+      return;
+    }
+    setSpecialties(data || []);
   }
 
-  function openEdit(cat) {
-    setEditId(cat.id);
-    setForm({
-      name: cat.name,
-      description: cat.description || "",
-      color: cat.color,
-      bg: cat.bg,
-      display_order: cat.display_order || 0,
+  async function loadTherapistCounts() {
+    const { data, error } = await supabase
+      .from("therapist_profiles")
+      .select("specialty");
+
+    if (error) {
+      console.error("Error loading therapist counts:", error);
+      return;
+    }
+
+    const counts = {};
+    (data || []).forEach((row) => {
+      const key = (row.specialty || "").trim();
+      if (!key) return;
+      counts[key] = (counts[key] || 0) + 1;
     });
-    setShowForm(true);
+    setTherapistCounts(counts);
   }
 
-  async function saveForm() {
-    if (!form.name.trim()) return;
+  function openNew() {
+    setEditing(null);
+    setName("");
+    setDescription("");
+    setColorIdx(0);
+    setIsActive(true);
+    setDisplayOrder(specialties.length + 1);
+    setShowModal(true);
+  }
+
+  function openEdit(item) {
+    setEditing(item);
+    setName(item.name || "");
+    setDescription(item.description || "");
+    const idx = COLOR_PRESETS.findIndex((c) => c.color === item.color);
+    setColorIdx(idx >= 0 ? idx : 0);
+    setIsActive(!!item.is_active);
+    setDisplayOrder(item.display_order || 0);
+    setShowModal(true);
+  }
+
+  async function handleSave() {
+    if (!name.trim()) {
+      alert("Το όνομα είναι υποχρεωτικό");
+      return;
+    }
     setSaving(true);
+
+    const preset = COLOR_PRESETS[colorIdx] || COLOR_PRESETS[0];
     const payload = {
-      name: form.name.trim(),
-      description: form.description.trim(),
-      color: form.color,
-      bg: form.bg,
-      display_order: parseInt(form.display_order) || 0,
+      name: name.trim(),
+      description: description.trim() || null,
+      color: preset.color,
+      bg: preset.bg,
+      is_active: isActive,
+      display_order: Number(displayOrder) || 0,
       updated_at: new Date().toISOString(),
     };
 
-    if (editId) {
-      const { error } = await supabase.from("specialties").update(payload).eq("id", editId);
-      if (error) alert("Σφάλμα: " + error.message);
+    let error;
+    if (editing) {
+      ({ error } = await supabase
+        .from("specialties")
+        .update(payload)
+        .eq("id", editing.id));
     } else {
-      const { error } = await supabase.from("specialties").insert([{ ...payload, is_active: true }]);
-      if (error) alert("Σφάλμα: " + error.message);
+      ({ error } = await supabase.from("specialties").insert(payload));
     }
+
     setSaving(false);
-    setShowForm(false);
-    setEditId(null);
-    await fetchAll();
-  }
 
-  async function toggleActive(id, currentValue) {
-    await supabase.from("specialties").update({ is_active: !currentValue }).eq("id", id);
-    await fetchAll();
-  }
-
-  async function deleteCategory(id) {
-    const { error } = await supabase.from("specialties").delete().eq("id", id);
     if (error) {
-      alert("Σφάλμα διαγραφής: " + error.message);
-    } else {
-      setDeleteConfirm(null);
-      await fetchAll();
+      console.error(error);
+      alert("Σφάλμα: " + error.message);
+      return;
     }
+
+    setShowModal(false);
+    await loadSpecialties();
   }
 
-  const active = categories.filter(c => c.is_active);
-  const inactive = categories.filter(c => !c.is_active);
+  async function handleToggleActive(item) {
+    const { error } = await supabase
+      .from("specialties")
+      .update({
+        is_active: !item.is_active,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", item.id);
 
-  if (loading) return (
-    <div style={{ padding:24, display:"flex", alignItems:"center", justifyContent:"center", minHeight:400 }}>
-      <div style={{ fontSize:16, color:"#64748B" }}>Φόρτωση κατηγοριών...</div>
-    </div>
+    if (error) {
+      alert("Σφάλμα: " + error.message);
+      return;
+    }
+    loadSpecialties();
+  }
+
+  async function handleDelete(item) {
+    const count = therapistCounts[item.name] || 0;
+    let confirmMsg = `Διαγραφή της ειδικότητας "${item.name}";`;
+    if (count > 0) {
+      confirmMsg = `⚠️ Η ειδικότητα "${item.name}" χρησιμοποιείται από ${count} θεραπευτή/ές. Είστε σίγουροι ότι θέλετε να τη διαγράψετε;`;
+    }
+    if (!confirm(confirmMsg)) return;
+
+    const { error } = await supabase
+      .from("specialties")
+      .delete()
+      .eq("id", item.id);
+
+    if (error) {
+      alert("Σφάλμα: " + error.message);
+      return;
+    }
+    loadSpecialties();
+  }
+
+  const activeCount = specialties.filter((s) => s.is_active).length;
+  const totalTherapists = Object.values(therapistCounts).reduce(
+    (a, b) => a + b,
+    0
   );
 
   return (
-    <div>
-      <div style={{ display:"flex", alignItems:"flex-start", justifyContent:"space-between", marginBottom:24, flexWrap:"wrap", gap:12 }}>
+    <div style={{ padding: 24 }}>
+      {/* Header */}
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          marginBottom: 24,
+        }}
+      >
         <div>
-          <h1 style={{ fontSize:26, fontWeight:700, color:"#0F172A", margin:0 }}>Κατηγορίες / Ειδικότητες</h1>
-          <p style={{ fontSize:13, color:"#94A3B8", marginTop:4 }}>Διαχείριση ειδικοτήτων που εμφανίζονται στο public site</p>
+          <h1
+            style={{
+              fontSize: 28,
+              fontWeight: 700,
+              color: "#0F172A",
+              margin: 0,
+              fontFamily: "'DM Serif Display', serif",
+            }}
+          >
+            🏷️ Ειδικότητες
+          </h1>
+          <p style={{ color: "#64748B", margin: "4px 0 0 0" }}>
+            Διαχείριση κατηγοριών φυσιοθεραπείας
+          </p>
         </div>
-        <button onClick={openAdd} style={{ padding:"10px 20px", borderRadius:10, border:"none", background:"#1D4ED8", color:"#fff", fontSize:14, fontWeight:600, cursor:"pointer", fontFamily:"inherit" }}>
-          + Νέα Κατηγορία
+        <button
+          onClick={openNew}
+          style={{
+            background: "#38BDF8",
+            color: "white",
+            border: "none",
+            padding: "12px 24px",
+            borderRadius: 30,
+            fontSize: 15,
+            fontWeight: 600,
+            cursor: "pointer",
+            boxShadow: "0 2px 8px rgba(56,189,248,0.3)",
+          }}
+        >
+          + Νέα Ειδικότητα
         </button>
       </div>
 
-      {/* Summary */}
-      <div style={{ display:"flex", gap:14, marginBottom:24, flexWrap:"wrap" }}>
-        {[
-          { label:"Συνολικές", value:categories.length, bg:"#F8FAFC", border:"#E2E8F0", text:"#475569" },
-          { label:"Ενεργές",   value:active.length,     bg:"#F0FDF4", border:"#BBF7D0", text:"#15803D" },
-          { label:"Ανενεργές", value:inactive.length,   bg:"#FFF7ED", border:"#FED7AA", text:"#C2410C" },
-        ].map(c=>(
-          <div key={c.label} style={{ flex:1, minWidth:120, background:c.bg, border:`1px solid ${c.border}`, borderRadius:12, padding:"16px 20px" }}>
-            <div style={{ fontSize:11, fontWeight:700, color:c.text, textTransform:"uppercase", letterSpacing:"0.05em" }}>{c.label}</div>
-            <div style={{ fontSize:30, fontWeight:700, color:c.text, marginTop:4 }}>{c.value}</div>
+      {/* Stats */}
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(3, 1fr)",
+          gap: 16,
+          marginBottom: 24,
+        }}
+      >
+        <div
+          style={{
+            background: "white",
+            padding: 20,
+            borderRadius: 16,
+            border: "1px solid #E2E8F0",
+          }}
+        >
+          <div style={{ fontSize: 13, color: "#64748B", marginBottom: 4 }}>
+            Σύνολο
           </div>
-        ))}
+          <div style={{ fontSize: 28, fontWeight: 700, color: "#0F172A" }}>
+            {specialties.length}
+          </div>
+        </div>
+        <div
+          style={{
+            background: "white",
+            padding: 20,
+            borderRadius: 16,
+            border: "1px solid #E2E8F0",
+          }}
+        >
+          <div style={{ fontSize: 13, color: "#64748B", marginBottom: 4 }}>
+            Ενεργές
+          </div>
+          <div style={{ fontSize: 28, fontWeight: 700, color: "#15803D" }}>
+            {activeCount}
+          </div>
+        </div>
+        <div
+          style={{
+            background: "white",
+            padding: 20,
+            borderRadius: 16,
+            border: "1px solid #E2E8F0",
+          }}
+        >
+          <div style={{ fontSize: 13, color: "#64748B", marginBottom: 4 }}>
+            Θεραπευτές με ειδικότητα
+          </div>
+          <div style={{ fontSize: 28, fontWeight: 700, color: "#1D4ED8" }}>
+            {totalTherapists}
+          </div>
+        </div>
       </div>
 
-      {/* Active categories */}
-      <div style={{ fontSize:13, fontWeight:700, color:"#0F172A", marginBottom:12 }}>Ενεργές Κατηγορίες</div>
-      <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill, minmax(280px, 1fr))", gap:12, marginBottom:24 }}>
-        {active.length === 0 && (
-          <div style={{ padding:30, textAlign:"center", color:"#94A3B8", fontSize:14, background:"#fff", borderRadius:14, border:"1px solid #E2E8F0", gridColumn:"1 / -1" }}>
-            Δεν υπάρχουν ενεργές κατηγορίες
-          </div>
-        )}
-        {active.map(cat => {
-          const count = therapistCounts[cat.name] || 0;
-          return (
-            <div key={cat.id} style={{ background:"#fff", borderRadius:14, border:`1px solid ${cat.color}33`, padding:"18px 20px" }}>
-              <div style={{ display:"flex", alignItems:"flex-start", justifyContent:"space-between", marginBottom:10 }}>
-                <div style={{ display:"flex", alignItems:"center", gap:10 }}>
-                  <div style={{ width:36, height:36, borderRadius:10, background:cat.bg, display:"flex", alignItems:"center", justifyContent:"center" }}>
-                    <div style={{ width:14, height:14, borderRadius:"50%", background:cat.color }}/>
-                  </div>
-                  <div>
-                    <div style={{ fontWeight:700, fontSize:15, color:"#0F172A" }}>{cat.name}</div>
-                    <div style={{ fontSize:11, color:"#94A3B8" }}>{count} {count === 1 ? "θεραπευτής" : "θεραπευτές"}</div>
-                  </div>
+      {/* Cards Grid */}
+      {loading ? (
+        <div style={{ padding: 40, textAlign: "center", color: "#64748B" }}>
+          Φόρτωση...
+        </div>
+      ) : specialties.length === 0 ? (
+        <div
+          style={{
+            padding: 40,
+            textAlign: "center",
+            color: "#64748B",
+            background: "white",
+            borderRadius: 16,
+            border: "1px dashed #CBD5E1",
+          }}
+        >
+          Δεν υπάρχουν ειδικότητες ακόμη.
+        </div>
+      ) : (
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))",
+            gap: 16,
+          }}
+        >
+          {specialties.map((item) => {
+            const count = therapistCounts[item.name] || 0;
+            return (
+              <div
+                key={item.id}
+                style={{
+                  background: "white",
+                  borderRadius: 16,
+                  border: `1px solid ${item.is_active ? "#E2E8F0" : "#F1F5F9"}`,
+                  overflow: "hidden",
+                  opacity: item.is_active ? 1 : 0.6,
+                  transition: "transform 0.2s, box-shadow 0.2s",
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.transform = "translateY(-2px)";
+                  e.currentTarget.style.boxShadow =
+                    "0 4px 12px rgba(0,0,0,0.08)";
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.transform = "translateY(0)";
+                  e.currentTarget.style.boxShadow = "none";
+                }}
+              >
+                {/* Color band */}
+                <div
+                  style={{
+                    height: 60,
+                    background: item.bg,
+                    borderBottom: `3px solid ${item.color}`,
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    padding: "0 16px",
+                  }}
+                >
+                  <span
+                    style={{
+                      color: item.color,
+                      fontWeight: 700,
+                      fontSize: 16,
+                    }}
+                  >
+                    {item.name}
+                  </span>
+                  <span
+                    style={{
+                      background: item.color,
+                      color: "white",
+                      padding: "4px 10px",
+                      borderRadius: 20,
+                      fontSize: 12,
+                      fontWeight: 600,
+                    }}
+                  >
+                    {count} θεραπ.
+                  </span>
                 </div>
-                <Badge label="Ενεργή" bg="#D1FAE5" color="#065F46"/>
-              </div>
-              {cat.description && (
-                <p style={{ fontSize:12, color:"#64748B", margin:"0 0 14px", lineHeight:1.5 }}>{cat.description}</p>
-              )}
-              <div style={{ display:"flex", gap:8 }}>
-                <button onClick={()=>openEdit(cat)} style={{ flex:1, padding:"6px 0", borderRadius:8, border:"1px solid #E2E8F0", background:"transparent", color:"#475569", fontSize:12, fontWeight:600, cursor:"pointer", fontFamily:"inherit" }}>
-                  Επεξεργασία
-                </button>
-                <button onClick={()=>toggleActive(cat.id, cat.is_active)} style={{ flex:1, padding:"6px 0", borderRadius:8, border:"1px solid #FDE68A", background:"transparent", color:"#B45309", fontSize:12, fontWeight:600, cursor:"pointer", fontFamily:"inherit" }}>
-                  Απενεργοποίηση
-                </button>
-                {count === 0 && (
-                  <button onClick={()=>setDeleteConfirm(cat.id)} style={{ padding:"6px 10px", borderRadius:8, border:"1px solid #FECDD3", background:"transparent", color:"#BE123C", fontSize:12, fontWeight:600, cursor:"pointer", fontFamily:"inherit" }}>
-                    ✕
-                  </button>
-                )}
-              </div>
-            </div>
-          );
-        })}
-      </div>
 
-      {/* Inactive categories */}
-      {inactive.length > 0 && (
-        <>
-          <div style={{ fontSize:13, fontWeight:700, color:"#94A3B8", marginBottom:12 }}>Ανενεργές Κατηγορίες</div>
-          <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill, minmax(280px, 1fr))", gap:12, marginBottom:24 }}>
-            {inactive.map(cat => (
-              <div key={cat.id} style={{ background:"#F8FAFC", borderRadius:14, border:"1px solid #E2E8F0", padding:"18px 20px", opacity:0.85 }}>
-                <div style={{ display:"flex", alignItems:"flex-start", justifyContent:"space-between", marginBottom:10 }}>
-                  <div style={{ display:"flex", alignItems:"center", gap:10 }}>
-                    <div style={{ width:36, height:36, borderRadius:10, background:"#F1F5F9", display:"flex", alignItems:"center", justifyContent:"center" }}>
-                      <div style={{ width:14, height:14, borderRadius:"50%", background:"#CBD5E1" }}/>
-                    </div>
-                    <div>
-                      <div style={{ fontWeight:700, fontSize:15, color:"#64748B" }}>{cat.name}</div>
-                      <div style={{ fontSize:11, color:"#94A3B8" }}>{therapistCounts[cat.name] || 0} θεραπευτές</div>
-                    </div>
+                {/* Body */}
+                <div style={{ padding: 16 }}>
+                  <p
+                    style={{
+                      fontSize: 13,
+                      color: "#475569",
+                      margin: 0,
+                      minHeight: 40,
+                      lineHeight: 1.5,
+                    }}
+                  >
+                    {item.description || (
+                      <em style={{ color: "#94A3B8" }}>
+                        (χωρίς περιγραφή)
+                      </em>
+                    )}
+                  </p>
+
+                  <div
+                    style={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      alignItems: "center",
+                      marginTop: 12,
+                      fontSize: 12,
+                      color: "#94A3B8",
+                    }}
+                  >
+                    <span>Σειρά: {item.display_order || 0}</span>
+                    <span>
+                      {item.is_active ? (
+                        <span style={{ color: "#15803D", fontWeight: 600 }}>
+                          ● Ενεργή
+                        </span>
+                      ) : (
+                        <span style={{ color: "#94A3B8" }}>○ Ανενεργή</span>
+                      )}
+                    </span>
                   </div>
-                  <Badge label="Ανενεργή" bg="#F1F5F9" color="#64748B"/>
-                </div>
-                {cat.description && <p style={{ fontSize:12, color:"#94A3B8", margin:"0 0 14px", lineHeight:1.5 }}>{cat.description}</p>}
-                <div style={{ display:"flex", gap:8 }}>
-                  <button onClick={()=>toggleActive(cat.id, cat.is_active)} style={{ flex:1, padding:"6px 0", borderRadius:8, border:"none", background:"#15803D", color:"#fff", fontSize:12, fontWeight:600, cursor:"pointer", fontFamily:"inherit" }}>
-                    Ενεργοποίηση
-                  </button>
-                  <button onClick={()=>openEdit(cat)} style={{ padding:"6px 12px", borderRadius:8, border:"1px solid #E2E8F0", background:"transparent", color:"#475569", fontSize:12, fontWeight:600, cursor:"pointer", fontFamily:"inherit" }}>
-                    ✏️
-                  </button>
-                  <button onClick={()=>setDeleteConfirm(cat.id)} style={{ padding:"6px 10px", borderRadius:8, border:"1px solid #FECDD3", background:"transparent", color:"#BE123C", fontSize:12, fontWeight:600, cursor:"pointer", fontFamily:"inherit" }}>
-                    ✕
-                  </button>
+
+                  {/* Actions */}
+                  <div
+                    style={{
+                      display: "flex",
+                      gap: 6,
+                      marginTop: 14,
+                      paddingTop: 14,
+                      borderTop: "1px solid #F1F5F9",
+                    }}
+                  >
+                    <button
+                      onClick={() => openEdit(item)}
+                      style={{
+                        flex: 1,
+                        background: "#EFF6FF",
+                        color: "#1D4ED8",
+                        border: "none",
+                        padding: "8px 0",
+                        borderRadius: 8,
+                        fontSize: 13,
+                        fontWeight: 600,
+                        cursor: "pointer",
+                      }}
+                    >
+                      ✏️ Επεξ.
+                    </button>
+                    <button
+                      onClick={() => handleToggleActive(item)}
+                      style={{
+                        flex: 1,
+                        background: item.is_active ? "#FEF3C7" : "#DCFCE7",
+                        color: item.is_active ? "#A16207" : "#15803D",
+                        border: "none",
+                        padding: "8px 0",
+                        borderRadius: 8,
+                        fontSize: 13,
+                        fontWeight: 600,
+                        cursor: "pointer",
+                      }}
+                    >
+                      {item.is_active ? "⏸️ Παύση" : "▶️ Ενεργ."}
+                    </button>
+                    <button
+                      onClick={() => handleDelete(item)}
+                      style={{
+                        background: "#FEE2E2",
+                        color: "#BE123C",
+                        border: "none",
+                        padding: "8px 12px",
+                        borderRadius: 8,
+                        fontSize: 13,
+                        fontWeight: 600,
+                        cursor: "pointer",
+                      }}
+                    >
+                      🗑️
+                    </button>
+                  </div>
                 </div>
               </div>
-            ))}
-          </div>
-        </>
+            );
+          })}
+        </div>
       )}
 
-      {/* Add/Edit Modal */}
-      {showForm && (
-        <div style={{ position:"fixed", inset:0, background:"rgba(15,23,42,0.5)", display:"flex", alignItems:"center", justifyContent:"center", zIndex:1000, padding:24 }}
-          onClick={e=>{ if(e.target===e.currentTarget) setShowForm(false); }}>
-          <div style={{ background:"#fff", borderRadius:18, width:"100%", maxWidth:480, boxShadow:"0 20px 60px rgba(0,0,0,0.2)", padding:"28px", maxHeight:"90vh", overflowY:"auto" }}>
-            <h2 style={{ fontSize:20, fontWeight:700, color:"#0F172A", margin:"0 0 20px" }}>
-              {editId ? "Επεξεργασία Κατηγορίας" : "Νέα Κατηγορία"}
+      {/* Modal */}
+      {showModal && (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(15,23,42,0.5)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 1000,
+            padding: 20,
+          }}
+          onClick={() => setShowModal(false)}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              background: "white",
+              borderRadius: 20,
+              maxWidth: 520,
+              width: "100%",
+              padding: 28,
+              maxHeight: "90vh",
+              overflowY: "auto",
+            }}
+          >
+            <h2
+              style={{
+                fontSize: 22,
+                fontWeight: 700,
+                margin: "0 0 20px 0",
+                color: "#0F172A",
+              }}
+            >
+              {editing ? "Επεξεργασία Ειδικότητας" : "Νέα Ειδικότητα"}
             </h2>
 
-            <div style={{ marginBottom:16 }}>
-              <label style={{ fontSize:12, fontWeight:700, color:"#64748B", textTransform:"uppercase", letterSpacing:"0.05em", display:"block", marginBottom:6 }}>Όνομα *</label>
-              <input value={form.name} onChange={e=>setForm(p=>({...p,name:e.target.value}))} placeholder="π.χ. Ορθοπαιδική"
-                style={{ width:"100%", padding:"10px 14px", borderRadius:8, border:"1px solid #E2E8F0", fontSize:14, fontFamily:"inherit", outline:"none", color:"#0F172A", boxSizing:"border-box" }}/>
+            {/* Name */}
+            <div style={{ marginBottom: 16 }}>
+              <label
+                style={{
+                  display: "block",
+                  fontSize: 13,
+                  fontWeight: 600,
+                  color: "#475569",
+                  marginBottom: 6,
+                }}
+              >
+                Όνομα *
+              </label>
+              <input
+                type="text"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="π.χ. Ορθοπαιδική"
+                style={{
+                  width: "100%",
+                  padding: "10px 14px",
+                  border: "1px solid #CBD5E1",
+                  borderRadius: 10,
+                  fontSize: 15,
+                  outline: "none",
+                }}
+              />
             </div>
 
-            <div style={{ marginBottom:16 }}>
-              <label style={{ fontSize:12, fontWeight:700, color:"#64748B", textTransform:"uppercase", letterSpacing:"0.05em", display:"block", marginBottom:6 }}>Περιγραφή</label>
-              <textarea value={form.description} onChange={e=>setForm(p=>({...p,description:e.target.value}))} placeholder="Σύντομη περιγραφή..." rows={3}
-                style={{ width:"100%", padding:"10px 14px", borderRadius:8, border:"1px solid #E2E8F0", fontSize:14, fontFamily:"inherit", outline:"none", color:"#0F172A", resize:"vertical", boxSizing:"border-box" }}/>
+            {/* Description */}
+            <div style={{ marginBottom: 16 }}>
+              <label
+                style={{
+                  display: "block",
+                  fontSize: 13,
+                  fontWeight: 600,
+                  color: "#475569",
+                  marginBottom: 6,
+                }}
+              >
+                Περιγραφή
+              </label>
+              <textarea
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                placeholder="Σύντομη περιγραφή..."
+                rows={3}
+                style={{
+                  width: "100%",
+                  padding: "10px 14px",
+                  border: "1px solid #CBD5E1",
+                  borderRadius: 10,
+                  fontSize: 14,
+                  outline: "none",
+                  fontFamily: "inherit",
+                  resize: "vertical",
+                }}
+              />
             </div>
 
-            <div style={{ marginBottom:16 }}>
-              <label style={{ fontSize:12, fontWeight:700, color:"#64748B", textTransform:"uppercase", letterSpacing:"0.05em", display:"block", marginBottom:6 }}>Σειρά Εμφάνισης</label>
-              <input type="number" value={form.display_order} onChange={e=>setForm(p=>({...p,display_order:e.target.value}))} placeholder="0" min={0}
-                style={{ width:"100%", padding:"10px 14px", borderRadius:8, border:"1px solid #E2E8F0", fontSize:14, fontFamily:"inherit", outline:"none", color:"#0F172A", boxSizing:"border-box" }}/>
-            </div>
-
-            <div style={{ marginBottom:24 }}>
-              <label style={{ fontSize:12, fontWeight:700, color:"#64748B", textTransform:"uppercase", letterSpacing:"0.05em", display:"block", marginBottom:8 }}>Χρώμα</label>
-              <div style={{ display:"flex", gap:8, flexWrap:"wrap" }}>
-                {COLORS.map(c => (
-                  <div key={c.color} onClick={()=>setForm(p=>({...p,color:c.color,bg:c.bg}))}
-                    style={{ width:32, height:32, borderRadius:"50%", background:c.color, cursor:"pointer", border:`3px solid ${form.color===c.color?"#0F172A":"transparent"}` }}
-                    title={c.label}/>
+            {/* Color picker */}
+            <div style={{ marginBottom: 16 }}>
+              <label
+                style={{
+                  display: "block",
+                  fontSize: 13,
+                  fontWeight: 600,
+                  color: "#475569",
+                  marginBottom: 8,
+                }}
+              >
+                Χρώμα
+              </label>
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "repeat(4, 1fr)",
+                  gap: 8,
+                }}
+              >
+                {COLOR_PRESETS.map((preset, idx) => (
+                  <button
+                    key={idx}
+                    onClick={() => setColorIdx(idx)}
+                    style={{
+                      background: preset.bg,
+                      border:
+                        colorIdx === idx
+                          ? `2px solid ${preset.color}`
+                          : "2px solid transparent",
+                      borderRadius: 10,
+                      padding: "10px 6px",
+                      cursor: "pointer",
+                      fontSize: 12,
+                      fontWeight: 600,
+                      color: preset.color,
+                    }}
+                  >
+                    {preset.label}
+                  </button>
                 ))}
               </div>
             </div>
 
-            {form.name && (
-              <div style={{ marginBottom:20, padding:"10px 14px", borderRadius:10, background:form.bg, border:`1px solid ${form.color}33` }}>
-                <span style={{ fontSize:13, fontWeight:700, color:form.color }}>Προεπισκόπηση: {form.name}</span>
+            {/* Display order + Active */}
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "1fr 1fr",
+                gap: 12,
+                marginBottom: 24,
+              }}
+            >
+              <div>
+                <label
+                  style={{
+                    display: "block",
+                    fontSize: 13,
+                    fontWeight: 600,
+                    color: "#475569",
+                    marginBottom: 6,
+                  }}
+                >
+                  Σειρά εμφάνισης
+                </label>
+                <input
+                  type="number"
+                  value={displayOrder}
+                  onChange={(e) => setDisplayOrder(e.target.value)}
+                  style={{
+                    width: "100%",
+                    padding: "10px 14px",
+                    border: "1px solid #CBD5E1",
+                    borderRadius: 10,
+                    fontSize: 15,
+                    outline: "none",
+                  }}
+                />
               </div>
-            )}
-
-            <div style={{ display:"flex", gap:10 }}>
-              <button onClick={saveForm} disabled={!form.name.trim() || saving} style={{ flex:1, padding:"10px 0", borderRadius:8, border:"none", background:form.name.trim() && !saving?"#1D4ED8":"#E2E8F0", color:form.name.trim() && !saving?"#fff":"#94A3B8", fontSize:14, fontWeight:600, cursor:form.name.trim() && !saving?"pointer":"not-allowed", fontFamily:"inherit" }}>
-                {saving ? "Αποθήκευση..." : editId ? "💾 Αποθήκευση" : "➕ Προσθήκη"}
-              </button>
-              <button onClick={()=>setShowForm(false)} style={{ padding:"10px 20px", borderRadius:8, border:"1px solid #E2E8F0", background:"transparent", color:"#64748B", fontSize:13, fontWeight:600, cursor:"pointer", fontFamily:"inherit" }}>
-                Άκυρο
-              </button>
+              <div>
+                <label
+                  style={{
+                    display: "block",
+                    fontSize: 13,
+                    fontWeight: 600,
+                    color: "#475569",
+                    marginBottom: 6,
+                  }}
+                >
+                  Κατάσταση
+                </label>
+                <button
+                  onClick={() => setIsActive(!isActive)}
+                  style={{
+                    width: "100%",
+                    padding: "10px 14px",
+                    border: "1px solid #CBD5E1",
+                    borderRadius: 10,
+                    fontSize: 14,
+                    fontWeight: 600,
+                    background: isActive ? "#DCFCE7" : "#F1F5F9",
+                    color: isActive ? "#15803D" : "#64748B",
+                    cursor: "pointer",
+                  }}
+                >
+                  {isActive ? "● Ενεργή" : "○ Ανενεργή"}
+                </button>
+              </div>
             </div>
-          </div>
-        </div>
-      )}
 
-      {/* Delete confirm */}
-      {deleteConfirm && (
-        <div style={{ position:"fixed", inset:0, background:"rgba(15,23,42,0.5)", display:"flex", alignItems:"center", justifyContent:"center", zIndex:1000, padding:24 }}>
-          <div style={{ background:"#fff", borderRadius:18, width:"100%", maxWidth:400, padding:"28px", textAlign:"center" }}>
-            <div style={{ fontSize:40, marginBottom:12 }}>🗑️</div>
-            <h2 style={{ fontSize:18, fontWeight:700, color:"#0F172A", margin:"0 0 8px" }}>Διαγραφή Κατηγορίας</h2>
-            <p style={{ fontSize:14, color:"#64748B", margin:"0 0 24px" }}>Είσαι σίγουρος; Αυτή η ενέργεια δεν μπορεί να αναιρεθεί.</p>
-            <div style={{ display:"flex", gap:10 }}>
-              <button onClick={()=>deleteCategory(deleteConfirm)} style={{ flex:1, padding:"10px 0", borderRadius:8, border:"none", background:"#BE123C", color:"#fff", fontSize:14, fontWeight:600, cursor:"pointer", fontFamily:"inherit" }}>
-                Διαγραφή
-              </button>
-              <button onClick={()=>setDeleteConfirm(null)} style={{ flex:1, padding:"10px 0", borderRadius:8, border:"1px solid #E2E8F0", background:"transparent", color:"#64748B", fontSize:14, fontWeight:600, cursor:"pointer", fontFamily:"inherit" }}>
+            {/* Buttons */}
+            <div
+              style={{
+                display: "flex",
+                gap: 10,
+                justifyContent: "flex-end",
+              }}
+            >
+              <button
+                onClick={() => setShowModal(false)}
+                disabled={saving}
+                style={{
+                  padding: "10px 20px",
+                  border: "1px solid #CBD5E1",
+                  borderRadius: 30,
+                  background: "white",
+                  fontSize: 14,
+                  fontWeight: 600,
+                  color: "#475569",
+                  cursor: "pointer",
+                }}
+              >
                 Άκυρο
+              </button>
+              <button
+                onClick={handleSave}
+                disabled={saving}
+                style={{
+                  padding: "10px 24px",
+                  border: "none",
+                  borderRadius: 30,
+                  background: "#38BDF8",
+                  fontSize: 14,
+                  fontWeight: 600,
+                  color: "white",
+                  cursor: saving ? "not-allowed" : "pointer",
+                  opacity: saving ? 0.6 : 1,
+                }}
+              >
+                {saving ? "Αποθήκευση..." : "💾 Αποθήκευση"}
               </button>
             </div>
           </div>
