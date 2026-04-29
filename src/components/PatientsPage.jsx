@@ -29,7 +29,7 @@ const TYPE_MAP = {
 // ─── PATIENT MODAL ──────────────────────────────────────────────────────────
 function PatientModal({ patient, onClose, onDelete }) {
   const [confirmDelete, setConfirmDelete] = useState(false);
-  const fullAddress = [patient.address, patient.area, patient.postal_code].filter(Boolean).join(", ");
+  const fullAddress = [patient.address, patient.area, patient.city, patient.postal_code].filter(Boolean).join(", ");
 
   return (
     <div style={{ position:"fixed", inset:0, background:"rgba(15,23,42,0.5)", display:"flex", alignItems:"center", justifyContent:"center", zIndex:1000, padding:24 }}
@@ -68,6 +68,17 @@ function PatientModal({ patient, onClose, onDelete }) {
             <div style={{ flex:1, minWidth:120, background:"#FAF5FF", border:"1px solid #E9D5FF", borderRadius:10, padding:"12px 16px" }}>
               <div style={{ fontSize:11, fontWeight:700, color:"#7E22CE", textTransform:"uppercase", letterSpacing:"0.05em" }}>Reviews</div>
               <div style={{ fontSize:24, fontWeight:700, color:"#7E22CE", marginTop:2 }}>{patient.totalReviews || 0}</div>
+            </div>
+          </div>
+
+          {/* Profile fields */}
+          <div>
+            <div style={{ fontSize:12, fontWeight:700, color:"#94A3B8", textTransform:"uppercase", letterSpacing:"0.06em", marginBottom:8 }}>👤 Στοιχεία Προφίλ</div>
+            <div style={{ background:"#F8FAFC", border:"1px solid #E2E8F0", borderRadius:10, padding:"12px 16px", display:"grid", gridTemplateColumns:"1fr 1fr", gap:"8px 16px", fontSize:13 }}>
+              <div><span style={{ color:"#94A3B8" }}>Περιοχή:</span> <strong style={{ color:"#0F172A" }}>{patient.area || "—"}</strong></div>
+              <div><span style={{ color:"#94A3B8" }}>Πόλη:</span> <strong style={{ color:"#0F172A" }}>{patient.city || "—"}</strong></div>
+              <div style={{ gridColumn:"1 / -1" }}><span style={{ color:"#94A3B8" }}>Διεύθυνση:</span> <strong style={{ color:"#0F172A" }}>{patient.address || "—"}</strong></div>
+              <div><span style={{ color:"#94A3B8" }}>ΤΚ:</span> <strong style={{ color:"#0F172A" }}>{patient.postal_code || "—"}</strong></div>
             </div>
           </div>
 
@@ -216,7 +227,15 @@ export default function PatientsPage() {
       filter === "all" ? true :
       filter === "active" ? (p.requests && p.requests.length > 0) :
       filter === "inactive" ? (!p.requests || p.requests.length === 0) : true;
-    const matchSearch = ((p.name||"") + (p.phone||"") + (p.area||"") + (p.address||"")).toLowerCase().includes(search.toLowerCase());
+    const haystack = [
+      p.name || "",
+      p.phone || "",
+      p.area || "",
+      p.address || "",
+      p.city || "",
+      p.postal_code || "",
+    ].join(" ").toLowerCase();
+    const matchSearch = haystack.includes(search.toLowerCase());
     return matchFilter && matchSearch;
   });
 
@@ -261,7 +280,7 @@ export default function PatientsPage() {
             </button>
           ))}
         </div>
-        <input type="text" placeholder="Αναζήτηση ονόματος, τηλεφώνου, περιοχής..." value={search} onChange={e=>setSearch(e.target.value)}
+        <input type="text" placeholder="Αναζήτηση ονόματος, τηλεφώνου, περιοχής, πόλης..." value={search} onChange={e=>setSearch(e.target.value)}
           style={{ flex:1, minWidth:200, padding:"9px 14px", borderRadius:8, border:"1px solid #E2E8F0", fontSize:13, fontFamily:"inherit", background:"#fff", outline:"none", color:"#0F172A" }}/>
       </div>
 
