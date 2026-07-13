@@ -5,6 +5,7 @@ import {
   Search, Download, X, Check, AlertTriangle, CheckCircle2, XCircle,
   Star, Shield, FileText, User, MapPin, Euro, Award, Pause, Play,
   Tag, MessageSquare, Save, ExternalLink, Users, TrendingUp, Clock,
+  Eye, EyeOff, GraduationCap,
 } from "lucide-react";
 
 // ─── REJECT REASONS ──────────────────────────────────────────────────────
@@ -18,7 +19,6 @@ const REJECT_REASONS = {
   other:                   "Άλλος λόγος",
 };
 
-// ─── SUPPORT TAGS ────────────────────────────────────────────────────────
 const THERAPIST_TAGS = [
   "Πολύ αξιόπιστος",
   "Καθυστερεί να απαντήσει",
@@ -46,55 +46,49 @@ function exportCsv(filename, rows) {
 }
 
 const fmtDate = (d) => (d ? new Date(d).toLocaleDateString("el-GR", { day: "2-digit", month: "2-digit", year: "numeric" }) : "—");
+const jsonCount = (v) => (Array.isArray(v) ? v.length : 0);
+const has = (v) => !!(v && String(v).trim());
 
-// ─── CHECKLIST (16 σημεία) ───────────────────────────────────────────────
+// ─── CHECKLIST ───────────────────────────────────────────────────────────
+// ΚΑΤΟΠΤΡΟ της calc_profile_completeness() στη ΒΔ.
+// Η ΒΑΣΗ αποφασίζει (is_profile_complete) — εδώ δείχνουμε ΤΙ λείπει.
 function buildChecklist(t) {
-  const has = (v) => !!(v && String(v).trim());
-  const hasArr = (v) => Array.isArray(v) && v.length > 0;
-
-  return [
-    // ΥΠΟΧΡΕΩΤΙΚΑ (7)
-    { key: "name",        label: "Ονοματεπώνυμο",              ok: has(t.name),                required: true },
-    { key: "license_up",  label: "Άδεια ασκήσεως ανεβασμένη",  ok: has(t.license_url),         required: true },
-    { key: "license_ver", label: "Άδεια ελεγμένη από admin",   ok: !!t.license_verified,       required: true, manual: true },
-    { key: "specialty",   label: "Ειδικότητα",                 ok: has(t.specialty),           required: true },
-    { key: "areas",       label: "Περιοχές εξυπηρέτησης",      ok: hasArr(t.service_areas) || has(t.area), required: true },
-    { key: "price",       label: "Τιμή συνεδρίας",             ok: Number(t.price_per_session) > 0, required: true },
-    { key: "contact",     label: "Στοιχεία επικοινωνίας",      ok: has(t.email) && has(t.phone), required: true },
-
-    // ΠΡΟΑΙΡΕΤΙΚΑ (9)
-    { key: "photo",       label: "Φωτογραφία προφίλ",          ok: has(t.photo_url) },
-    { key: "bio",         label: "Βιογραφικό σημείωμα (bio)",  ok: has(t.bio) },
-    { key: "experience",  label: "Έτη εμπειρίας",              ok: Number(t.years_experience) > 0 },
-    { key: "cv",          label: "CV ανεβασμένο",              ok: has(t.cv_url) },
-    { key: "certs",       label: "Πιστοποιήσεις",              ok: hasArr(t.certifications_urls) },
-    { key: "conditions",  label: "Παθήσεις που αναλαμβάνει",   ok: (t.conditionsCount || 0) > 0 },
-    { key: "iban",        label: "IBAN / στοιχεία πληρωμής",   ok: has(t.iban) },
-    { key: "payout_name", label: "Δικαιούχος λογαριασμού",     ok: has(t.payout_name) },
-    { key: "terms",       label: "Αποδοχή όρων συνεργασίας",   ok: !!t.terms_accepted_at, manual: true },
+  const required = [
+    { key: "name",        label: "Ονοματεπώνυμο",               ok: has(t.name) && t.name.trim().length > 2 },
+    { key: "photo",       label: "Φωτογραφία προφίλ",           ok: has(t.photo_url) },
+    { key: "license_up",  label: "Άδεια ασκήσεως ανεβασμένη",   ok: has(t.license_url) },
+    { key: "license_ver", label: "Άδεια ελεγμένη από admin",    ok: !!t.license_verified },
+    { key: "specialty",   label: "Ειδικότητα",                  ok: has(t.specialty) && t.specialty.trim().length > 3 },
+    { key: "bio",         label: "Βιογραφικό",                  ok: has(t.bio) && t.bio.trim().length >= 30,
+      detail: `${has(t.bio) ? t.bio.trim().length : 0}/30 χαρ.` },
+    { key: "conditions",  label: "Παθήσεις",                    ok: (t.conditionsCount || 0) >= 3,
+      detail: `${t.conditionsCount || 0}/3` },
+    { key: "areas",       label: "Περιοχές εξυπηρέτησης",       ok: jsonCount(t.service_areas) >= 1 || (has(t.area) && t.area.trim().length > 2) },
+    { key: "price",       label: "Τιμή συνεδρίας",              ok: Number(t.price_per_session) > 0 },
   ];
+
+  const optional = [
+    { key: "education",    label: "Σπουδές",                 ok: has(t.education_school) },
+    { key: "certs",        label: "Πιστοποιήσεις",           ok: jsonCount(t.certifications_urls) >= 1 },
+    { key: "cv",           label: "CV",                      ok: has(t.cv_url) },
+    { key: "experience",   label: "Έτη εμπειρίας",           ok: Number(t.years_experience) > 0 },
+    { key: "availability", label: "Διαθεσιμότητα",           ok: (t.availability_slots || []).length >= 1 },
+    { key: "iban",         label: "IBAN",                    ok: has(t.iban) },
+    { key: "terms",        label: "Αποδοχή όρων",            ok: !!t.terms_accepted_at },
+  ];
+
+  return { required, optional };
 }
 
-// ─── QUALITY SCORE (0-100) ───────────────────────────────────────────────
-function computeScore(t, checklist) {
-  // 1. Πληρότητα προφίλ (30)
-  const done = checklist.filter((c) => c.ok).length;
-  const completeness = Math.round((done / checklist.length) * 30);
-
-  // 2. Verified άδεια (20)
+// ─── QUALITY SCORE (απόδοση — ΔΙΑΦΟΡΕΤΙΚΟ από completeness) ─────────────
+function computeQuality(t) {
+  const completeness = Math.round(((t.completeness_score || 0) / 100) * 30);
   const verified = t.license_verified ? 20 : 0;
-
-  // 3. Ολοκληρωμένες συνεδρίες (15) — 10+ = full
-  const completedPts = Math.min(15, Math.round((t.completedCount || 0) / 10 * 15));
-
-  // 4. Χαμηλές ακυρώσεις (15)
+  const completedPts = Math.min(15, Math.round(((t.completedCount || 0) / 10) * 15));
   const total = (t.completedCount || 0) + (t.cancelledCount || 0);
   const cancelRate = total > 0 ? (t.cancelledCount || 0) / total : 0;
   const cancelPts = total === 0 ? 8 : Math.round((1 - cancelRate) * 15);
-
-  // 5. Μέση βαθμολογία (20)
   const ratingPts = t.avgRating ? Math.round((t.avgRating / 5) * 20) : 10;
-
   return Math.min(100, completeness + verified + completedPts + cancelPts + ratingPts);
 }
 
@@ -105,13 +99,22 @@ function scoreColor(s) {
   return { bg: "#FFF1F2", border: "#FECDD3", color: "#BE123C", label: "Χρειάζεται προσοχή" };
 }
 
-// ─── UI BITS ─────────────────────────────────────────────────────────────
+// ─── UI ──────────────────────────────────────────────────────────────────
 function Avatar({ name, photo, size = 44 }) {
   if (photo) return <img src={photo} alt={name} style={{ width: size, height: size, borderRadius: "50%", objectFit: "cover", flexShrink: 0 }} />;
   return (
     <div style={{ width: size, height: size, borderRadius: "50%", background: "#EFF6FF", color: "#1D4ED8", display: "flex", alignItems: "center", justifyContent: "center", fontSize: size * 0.33, fontWeight: 700, flexShrink: 0 }}>
       {(name || "?").split(" ").map((n) => n[0]).join("").slice(0, 2).toUpperCase()}
     </div>
+  );
+}
+
+function Badge({ label, bg, color, Icon }) {
+  return (
+    <span style={{ background: bg, color, padding: "3px 10px", borderRadius: 999, fontSize: 11, fontWeight: 700, letterSpacing: "0.04em", textTransform: "uppercase", whiteSpace: "nowrap", display: "inline-flex", alignItems: "center", gap: 4 }}>
+      {Icon && <Icon size={11} strokeWidth={2.5} />}
+      {label}
+    </span>
   );
 }
 
@@ -123,13 +126,10 @@ function StatusBadge({ t }) {
   return <Badge label="Ελλιπής" bg="#F1F5F9" color="#64748B" Icon={AlertTriangle} />;
 }
 
-function Badge({ label, bg, color, Icon }) {
-  return (
-    <span style={{ background: bg, color, padding: "3px 10px", borderRadius: 999, fontSize: 11, fontWeight: 700, letterSpacing: "0.04em", textTransform: "uppercase", whiteSpace: "nowrap", display: "inline-flex", alignItems: "center", gap: 4 }}>
-      {Icon && <Icon size={11} strokeWidth={2.5} />}
-      {label}
-    </span>
-  );
+function VisibilityBadge({ t }) {
+  const live = t.is_approved && t.is_profile_complete && !t.is_paused;
+  if (live) return <Badge label={t.is_profile_full ? "Ορατός · Πλήρες" : "Ορατός"} bg="#F0FDF4" color="#15803D" Icon={Eye} />;
+  return <Badge label="Αόρατος" bg="#FFF1F2" color="#BE123C" Icon={EyeOff} />;
 }
 
 function StatCard({ label, value, sub, bg, border, text, Icon }) {
@@ -152,17 +152,16 @@ export default function TherapistsPage() {
   const [user, setUser] = useState(null);
   const [busy, setBusy] = useState(false);
 
-  const [filter, setFilter] = useState("all"); // all | pending | approved | rejected | incomplete | paused
+  const [filter, setFilter] = useState("all");
   const [area, setArea] = useState("all");
   const [specialty, setSpecialty] = useState("all");
   const [search, setSearch] = useState("");
 
   const [selected, setSelected] = useState(null);
-  const [tab, setTab] = useState("check"); // check | profile | docs
+  const [tab, setTab] = useState("check");
   const [comment, setComment] = useState("");
-  const [docUrls, setDocUrls] = useState({});
+  const [docUrls, setDocUrls] = useState({ certs: [] });
 
-  // Reject modal
   const [rejectModal, setRejectModal] = useState(false);
   const [rejectCode, setRejectCode] = useState("");
   const [rejectNote, setRejectNote] = useState("");
@@ -173,6 +172,34 @@ export default function TherapistsPage() {
     const { data: { user } } = await supabase.auth.getUser();
     setUser(user);
     await fetchAll();
+  }
+
+  function enrich(t, condCount, reqs, rvs) {
+    const isCancelled = (s) => (s || "").startsWith("cancelled");
+    const myReqs = (reqs || []).filter((r) => r.therapist_id === t.id);
+    const myRvs = (rvs || []).filter((r) => r.therapist_id === t.id);
+    const avgRating = myRvs.length ? myRvs.reduce((s, r) => s + (r.rating || 0), 0) / myRvs.length : null;
+
+    const base = {
+      ...t,
+      conditionsCount: condCount,
+      requestsCount: myReqs.length,
+      completedCount: myReqs.filter((r) => r.status === "completed").length,
+      cancelledCount: myReqs.filter((r) => isCancelled(r.status)).length,
+      reviewsCount: myRvs.length,
+      avgRating,
+    };
+
+    const { required, optional } = buildChecklist(base);
+
+    return {
+      ...base,
+      required,
+      optional,
+      missingRequired: required.filter((c) => !c.ok),
+      quality: computeQuality(base),
+      isLive: base.is_approved && base.is_profile_complete && !base.is_paused,
+    };
   }
 
   async function fetchAll() {
@@ -186,40 +213,14 @@ export default function TherapistsPage() {
     ] = await Promise.all([
       supabase.from("therapist_profiles").select("*").order("created_at", { ascending: false }),
       supabase.from("session_requests").select("id, therapist_id, status"),
-      supabase.from("reviews").select("id, therapist_id, rating, is_published"),
-      supabase.from("therapist_conditions").select("therapist_id, condition_id"),
+      supabase.from("reviews").select("id, therapist_id, rating"),
+      supabase.from("therapist_conditions").select("therapist_id"),
     ]);
 
     const condCount = {};
     (tconds || []).forEach((c) => { condCount[c.therapist_id] = (condCount[c.therapist_id] || 0) + 1; });
 
-    const isCancelled = (s) => (s || "").startsWith("cancelled");
-
-    const enriched = (ths || []).map((t) => {
-      const myReqs = (reqs || []).filter((r) => r.therapist_id === t.id);
-      const myRvs = (rvs || []).filter((r) => r.therapist_id === t.id);
-      const avgRating = myRvs.length
-        ? myRvs.reduce((s, r) => s + (r.rating || 0), 0) / myRvs.length
-        : null;
-
-      const base = {
-        ...t,
-        conditionsCount: condCount[t.id] || 0,
-        requestsCount: myReqs.length,
-        completedCount: myReqs.filter((r) => r.status === "completed").length,
-        cancelledCount: myReqs.filter((r) => isCancelled(r.status)).length,
-        reviewsCount: myRvs.length,
-        avgRating,
-      };
-
-      const checklist = buildChecklist(base);
-      const score = computeScore(base, checklist);
-      const missingRequired = checklist.filter((c) => c.required && !c.ok);
-
-      return { ...base, checklist, score, missingRequired };
-    });
-
-    setTherapists(enriched);
+    setTherapists((ths || []).map((t) => enrich(t, condCount[t.id] || 0, reqs, rvs)));
     setLoading(false);
   }
 
@@ -228,32 +229,38 @@ export default function TherapistsPage() {
     setSelected(t);
     setTab("check");
     setComment(t.admin_comment || "");
-    setDocUrls({});
+    setDocUrls({ certs: [] });
     loadDocs(t);
   }
 
   async function loadDocs(t) {
-    const urls = {};
+    const urls = { certs: [] };
     const sign = async (path) => {
       if (!path) return null;
-      if (path.startsWith("http")) return path;
+      if (String(path).startsWith("http")) return path;
       const { data } = await supabase.storage.from("therapist-documents").createSignedUrl(path, 3600);
       return data?.signedUrl || null;
     };
     urls.license = await sign(t.license_url);
     urls.cv = await sign(t.cv_url);
-    urls.certs = [];
-    for (const c of (t.certifications_urls || [])) {
+    const certs = Array.isArray(t.certifications_urls) ? t.certifications_urls : [];
+    for (const c of certs) {
       const u = await sign(c);
       if (u) urls.certs.push(u);
     }
     setDocUrls(urls);
   }
 
+  // Το is_profile_complete το υπολογίζει TRIGGER στη ΒΔ — άρα ξαναδιαβάζουμε
   async function refreshSelected(id) {
+    const [{ data: fresh }, { count }, { data: reqs }, { data: rvs }] = await Promise.all([
+      supabase.from("therapist_profiles").select("*").eq("id", id).maybeSingle(),
+      supabase.from("therapist_conditions").select("*", { count: "exact", head: true }).eq("therapist_id", id),
+      supabase.from("session_requests").select("id, therapist_id, status"),
+      supabase.from("reviews").select("id, therapist_id, rating"),
+    ]);
+    if (fresh) setSelected(enrich(fresh, count || 0, reqs, rvs));
     await fetchAll();
-    const { data } = await supabase.from("therapist_profiles").select("*").eq("id", id).maybeSingle();
-    if (data) setSelected((prev) => (prev ? { ...prev, ...data, checklist: buildChecklist({ ...prev, ...data }) } : prev));
   }
 
   async function toggleLicenseVerified() {
@@ -270,23 +277,24 @@ export default function TherapistsPage() {
 
   async function toggleTerms() {
     setBusy(true);
-    const next = !selected.terms_accepted_at;
     await supabase.from("therapist_profiles").update({
-      terms_accepted_at: next ? new Date().toISOString() : null,
+      terms_accepted_at: selected.terms_accepted_at ? null : new Date().toISOString(),
     }).eq("id", selected.id);
     await refreshSelected(selected.id);
     setBusy(false);
   }
 
+  // Η ΒΑΣΗ είναι η αυθεντία
   async function approve() {
-    const fresh = therapists.find((t) => t.id === selected.id);
-    const missing = buildChecklist({ ...selected, conditionsCount: fresh?.conditionsCount || 0 })
-      .filter((c) => c.required && !c.ok);
-    if (missing.length > 0) {
-      alert("Δεν μπορεί να εγκριθεί. Λείπουν:\n\n" + missing.map((m) => "· " + m.label).join("\n"));
+    if (!selected.is_profile_complete) {
+      alert(
+        "Δεν μπορεί να εγκριθεί — το προφίλ είναι ελλιπές.\n\nΛείπουν:\n" +
+        selected.missingRequired.map((m) => "· " + m.label + (m.detail ? ` (${m.detail})` : "")).join("\n") +
+        "\n\nΑκόμα κι αν εγκρινόταν, δεν θα εμφανιζόταν στο site."
+      );
       return;
     }
-    if (!confirm(`Έγκριση του/της ${selected.name};\n\nΘα εμφανίζεται δημόσια στο site.`)) return;
+    if (!confirm(`Έγκριση του/της ${selected.name};\n\nΘα εμφανίζεται αμέσως δημόσια στο site.`)) return;
     setBusy(true);
     await supabase.from("therapist_profiles").update({
       is_approved: true,
@@ -334,8 +342,7 @@ export default function TherapistsPage() {
 
   async function toggleTag(tag) {
     const current = selected.support_tags || [];
-    const next = current.includes(tag) ? current.filter((t) => t !== tag) : [...current, tag];
-    setSelected({ ...selected, support_tags: next });
+    const next = current.includes(tag) ? current.filter((x) => x !== tag) : [...current, tag];
     setBusy(true);
     await supabase.from("therapist_profiles").update({ support_tags: next }).eq("id", selected.id);
     await refreshSelected(selected.id);
@@ -350,12 +357,12 @@ export default function TherapistsPage() {
     alert("Η σημείωση αποθηκεύτηκε.");
   }
 
-  async function saveScore() {
+  async function saveQuality() {
     setBusy(true);
-    await supabase.from("therapist_profiles").update({ quality_score: selected.score }).eq("id", selected.id);
+    await supabase.from("therapist_profiles").update({ quality_score: selected.quality }).eq("id", selected.id);
     await refreshSelected(selected.id);
     setBusy(false);
-    alert("Το score αποθηκεύτηκε στη βάση.");
+    alert("Το quality score αποθηκεύτηκε.");
   }
 
   // ─── FILTERS ───────────────────────────────────────────────────────────
@@ -365,15 +372,17 @@ export default function TherapistsPage() {
   function category(t) {
     if (t.is_paused) return "paused";
     if (t.application_status === "rejected") return "rejected";
-    if (t.is_approved) return "approved";
+    if (t.is_approved && !t.is_profile_complete) return "approved_invisible";
+    if (t.is_approved) return "live";
     if (t.application_status === "pending") return "pending";
     return "incomplete";
   }
 
   const counts = {
     all: therapists.length,
+    live: therapists.filter((t) => category(t) === "live").length,
+    approved_invisible: therapists.filter((t) => category(t) === "approved_invisible").length,
     pending: therapists.filter((t) => category(t) === "pending").length,
-    approved: therapists.filter((t) => category(t) === "approved").length,
     incomplete: therapists.filter((t) => category(t) === "incomplete").length,
     rejected: therapists.filter((t) => category(t) === "rejected").length,
     paused: therapists.filter((t) => category(t) === "paused").length,
@@ -389,14 +398,14 @@ export default function TherapistsPage() {
     }
     return true;
   }).sort((a, b) => {
-    // Σε αναμονή πρώτοι, μετά score
-    const pa = category(a) === "pending" ? 1 : 0;
-    const pb = category(b) === "pending" ? 1 : 0;
-    return pb - pa || b.score - a.score;
+    const rank = (t) => (category(t) === "approved_invisible" ? 2 : category(t) === "pending" ? 1 : 0);
+    return rank(b) - rank(a) || b.quality - a.quality;
   });
 
-  const avgScore = therapists.length
-    ? Math.round(therapists.reduce((s, t) => s + t.score, 0) / therapists.length)
+  const liveCount = therapists.filter((t) => t.isLive).length;
+  const fullCount = therapists.filter((t) => t.is_profile_full).length;
+  const avgQuality = therapists.length
+    ? Math.round(therapists.reduce((s, t) => s + t.quality, 0) / therapists.length)
     : 0;
 
   function handleExport() {
@@ -408,20 +417,23 @@ export default function TherapistsPage() {
         Τηλέφωνο: t.phone || "",
         Ειδικότητα: t.specialty || "",
         Περιοχή: t.area || "",
-        Περιοχές: (t.service_areas || []).join(" | "),
         Τιμή: t.price_per_session || "",
-        Εμπειρία: t.years_experience || "",
         Κατάσταση: category(t),
-        Score: t.score,
+        Ορατός: t.isLive ? "ΝΑΙ" : "ΟΧΙ",
+        Πλήρες: t.is_profile_full ? "ΝΑΙ" : "ΟΧΙ",
+        Πληρότητα: `${t.completeness_score || 0}%`,
+        Quality: t.quality,
         Άδεια_ελεγμένη: t.license_verified ? "ΝΑΙ" : "ΟΧΙ",
-        IBAN: t.iban || "",
+        Σπουδές: t.education_school || "",
         Παθήσεις: t.conditionsCount,
+        Bio_χαρακτήρες: t.bio ? t.bio.length : 0,
+        IBAN: t.iban || "",
         Αιτήματα: t.requestsCount,
         Ολοκληρωμένα: t.completedCount,
         Ακυρώσεις: t.cancelledCount,
         Αξιολογήσεις: t.reviewsCount,
         Μ_Ο_βαθμολογίας: t.avgRating ? t.avgRating.toFixed(1) : "",
-        Tags: (t.support_tags || []).join(" | "),
+        Τι_λείπει: t.missingRequired.map((m) => m.label).join(" | "),
         Εγγραφή: fmtDate(t.created_at),
       }))
     );
@@ -443,9 +455,7 @@ export default function TherapistsPage() {
       <div style={{ display: "flex", alignItems: "flex-start", gap: 16, marginBottom: 24, flexWrap: "wrap" }}>
         <div style={{ flex: 1, minWidth: 240 }}>
           <h1 style={{ fontSize: 26, fontWeight: 700, color: "#0F172A", margin: 0 }}>Θεραπευτές</h1>
-          <p style={{ fontSize: 13, color: "#94A3B8", marginTop: 4 }}>
-            Έλεγχος, έγκριση και ποιότητα συνεργατών
-          </p>
+          <p style={{ fontSize: 13, color: "#94A3B8", marginTop: 4 }}>Έλεγχος, έγκριση και ορατότητα στο site</p>
         </div>
         <button onClick={handleExport}
           style={{ padding: "9px 16px", borderRadius: 8, border: "1px solid #E2E8F0", background: "#fff", color: "#475569", fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", display: "inline-flex", alignItems: "center", gap: 6 }}>
@@ -453,7 +463,26 @@ export default function TherapistsPage() {
         </button>
       </div>
 
-      {/* PENDING ALERT */}
+      {/* ALERT: εγκεκριμένοι αλλά αόρατοι */}
+      {counts.approved_invisible > 0 && (
+        <div style={{ background: "#FFF1F2", border: "1px solid #FECDD3", borderRadius: 12, padding: "14px 18px", marginBottom: 12, display: "flex", alignItems: "center", gap: 12 }}>
+          <EyeOff size={20} color="#BE123C" strokeWidth={2.2} style={{ flexShrink: 0 }} />
+          <div style={{ flex: 1 }}>
+            <div style={{ fontSize: 14, fontWeight: 700, color: "#9F1239" }}>
+              {counts.approved_invisible} εγκεκριμένοι θεραπευτές ΔΕΝ εμφανίζονται στο site
+            </div>
+            <div style={{ fontSize: 12, color: "#9F1239", opacity: 0.85, marginTop: 2 }}>
+              Το προφίλ τους είναι ελλιπές. Νομίζουν ότι είναι ενεργοί, αλλά κανείς δεν τους βλέπει.
+            </div>
+          </div>
+          <button onClick={() => setFilter("approved_invisible")}
+            style={{ padding: "8px 14px", borderRadius: 8, border: "none", background: "#BE123C", color: "#fff", fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", whiteSpace: "nowrap" }}>
+            Δες τους
+          </button>
+        </div>
+      )}
+
+      {/* ALERT: σε αναμονή */}
       {counts.pending > 0 && (
         <div style={{ background: "#FFFBEB", border: "1px solid #FDE68A", borderRadius: 12, padding: "14px 18px", marginBottom: 20, display: "flex", alignItems: "center", gap: 12 }}>
           <Clock size={20} color="#B45309" strokeWidth={2.2} style={{ flexShrink: 0 }} />
@@ -474,11 +503,12 @@ export default function TherapistsPage() {
 
       {/* KPIs */}
       <div style={{ display: "flex", gap: 12, marginBottom: 24, flexWrap: "wrap" }}>
-        <StatCard Icon={Users}         label="Σύνολο"       value={counts.all}        sub="εγγεγραμμένοι"   bg="#F8FAFC" border="#E2E8F0" text="#475569" />
-        <StatCard Icon={CheckCircle2}  label="Εγκεκριμένοι" value={counts.approved}   sub="ενεργοί στο site" bg="#F0FDF4" border="#BBF7D0" text="#15803D" />
-        <StatCard Icon={Clock}         label="Σε αναμονή"   value={counts.pending}    sub="θέλουν έλεγχο"   bg="#FFFBEB" border="#FDE68A" text="#B45309" />
-        <StatCard Icon={AlertTriangle} label="Ελλιπείς"     value={counts.incomplete} sub="δεν ολοκλήρωσαν" bg="#F1F5F9" border="#E2E8F0" text="#64748B" />
-        <StatCard Icon={TrendingUp}    label="Μ.Ο. Score"   value={avgScore}          sub="ποιότητα δικτύου" bg="#EFF6FF" border="#BFDBFE" text="#1D4ED8" />
+        <StatCard Icon={Users}      label="Σύνολο"          value={counts.all}                sub="εγγεγραμμένοι"     bg="#F8FAFC" border="#E2E8F0" text="#475569" />
+        <StatCard Icon={Eye}        label="Ορατοί στο site" value={liveCount}                 sub="δέχονται αιτήματα" bg="#F0FDF4" border="#BBF7D0" text="#15803D" />
+        <StatCard Icon={EyeOff}     label="Εγκ. & αόρατοι"  value={counts.approved_invisible} sub="ελλιπές προφίλ"    bg="#FFF1F2" border="#FECDD3" text="#BE123C" />
+        <StatCard Icon={Clock}      label="Σε αναμονή"      value={counts.pending}            sub="θέλουν έλεγχο"     bg="#FFFBEB" border="#FDE68A" text="#B45309" />
+        <StatCard Icon={Award}      label="Πλήρη προφίλ"    value={fullCount}                 sub="ranking boost"     bg="#EEF2FF" border="#C7D2FE" text="#4338CA" />
+        <StatCard Icon={TrendingUp} label="Μ.Ο. Quality"    value={avgQuality}                sub="ποιότητα δικτύου"  bg="#EFF6FF" border="#BFDBFE" text="#1D4ED8" />
       </div>
 
       {/* FILTERS */}
@@ -486,8 +516,9 @@ export default function TherapistsPage() {
         <div style={{ display: "flex", gap: 4, background: "#E2E8F0", padding: 4, borderRadius: 10, flexWrap: "wrap" }}>
           {[
             ["all", "Όλοι"],
+            ["live", "Ορατοί"],
+            ["approved_invisible", "Εγκ. & αόρατοι"],
             ["pending", "Σε αναμονή"],
-            ["approved", "Εγκεκριμένοι"],
             ["incomplete", "Ελλιπείς"],
             ["rejected", "Απορριφθέντες"],
             ["paused", "Παγωμένοι"],
@@ -525,33 +556,48 @@ export default function TherapistsPage() {
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
           {filtered.map((t) => {
-            const sc = scoreColor(t.score);
-            const doneCount = t.checklist.filter((c) => c.ok).length;
+            const sc = scoreColor(t.quality);
+            const alarming = category(t) === "approved_invisible";
 
             return (
               <div key={t.id} onClick={() => openTherapist(t)}
-                style={{ background: "#fff", borderRadius: 14, border: "1px solid #E2E8F0", padding: "16px 20px", display: "flex", alignItems: "center", gap: 14, cursor: "pointer" }}>
+                style={{ background: "#fff", borderRadius: 14, border: `1px solid ${alarming ? "#FECDD3" : "#E2E8F0"}`, padding: "16px 20px", display: "flex", alignItems: "center", gap: 14, cursor: "pointer" }}>
 
                 <Avatar name={t.name} photo={t.photo_url} />
 
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
                     <span style={{ fontWeight: 700, fontSize: 15, color: "#0F172A" }}>{t.name || "Χωρίς όνομα"}</span>
+                    <VisibilityBadge t={t} />
                     <StatusBadge t={t} />
-                    {t.license_verified && <Badge label="Άδεια OK" bg="#EFF6FF" color="#1D4ED8" Icon={Shield} />}
-                    {(t.support_tags || []).slice(0, 1).map((tag) => (
-                      <span key={tag} style={{ background: "#F1F5F9", color: "#475569", padding: "3px 10px", borderRadius: 999, fontSize: 11, fontWeight: 600 }}>{tag}</span>
-                    ))}
                   </div>
                   <div style={{ fontSize: 12, color: "#64748B", marginTop: 3, display: "flex", gap: 12, flexWrap: "wrap" }}>
                     {t.specialty && <span>{t.specialty}</span>}
                     {t.area && <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}><MapPin size={11} /> {t.area}</span>}
                     {t.price_per_session > 0 && <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}><Euro size={11} /> {t.price_per_session}€</span>}
-                    <span>Checklist {doneCount}/{t.checklist.length}</span>
                   </div>
+
+                  {t.missingRequired.length > 0 && (
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: 5, marginTop: 7 }}>
+                      {t.missingRequired.slice(0, 4).map((m) => (
+                        <span key={m.key} style={{ fontSize: 11, color: "#BE123C", background: "#FFF1F2", border: "1px solid #FECDD3", padding: "2px 8px", borderRadius: 999, fontWeight: 600 }}>
+                          {m.label}{m.detail ? ` ${m.detail}` : ""}
+                        </span>
+                      ))}
+                      {t.missingRequired.length > 4 && (
+                        <span style={{ fontSize: 11, color: "#94A3B8" }}>+{t.missingRequired.length - 4}</span>
+                      )}
+                    </div>
+                  )}
                 </div>
 
                 <div style={{ display: "flex", gap: 18, alignItems: "center", flexShrink: 0, flexWrap: "wrap", justifyContent: "flex-end" }}>
+                  <div style={{ textAlign: "center", minWidth: 54 }}>
+                    <div style={{ fontSize: 16, fontWeight: 700, color: t.is_profile_complete ? "#15803D" : "#BE123C" }}>
+                      {t.completeness_score || 0}%
+                    </div>
+                    <div style={{ fontSize: 11, color: "#94A3B8" }}>πληρότητα</div>
+                  </div>
                   <div style={{ textAlign: "center", minWidth: 50 }}>
                     <div style={{ fontSize: 16, fontWeight: 700, color: "#0F172A" }}>{t.completedCount}</div>
                     <div style={{ fontSize: 11, color: "#94A3B8" }}>συνεδρίες</div>
@@ -563,9 +609,9 @@ export default function TherapistsPage() {
                     <div style={{ fontSize: 11, color: "#94A3B8" }}>{t.reviewsCount} reviews</div>
                   </div>
 
-                  <div style={{ background: sc.bg, border: `1px solid ${sc.border}`, borderRadius: 10, padding: "8px 14px", textAlign: "center", minWidth: 70 }}>
-                    <div style={{ fontSize: 18, fontWeight: 700, color: sc.color, lineHeight: 1 }}>{t.score}</div>
-                    <div style={{ fontSize: 10, color: sc.color, opacity: 0.8, marginTop: 3 }}>score</div>
+                  <div style={{ background: sc.bg, border: `1px solid ${sc.border}`, borderRadius: 10, padding: "8px 14px", textAlign: "center", minWidth: 66 }}>
+                    <div style={{ fontSize: 18, fontWeight: 700, color: sc.color, lineHeight: 1 }}>{t.quality}</div>
+                    <div style={{ fontSize: 10, color: sc.color, opacity: 0.8, marginTop: 3 }}>quality</div>
                   </div>
                 </div>
               </div>
@@ -580,35 +626,49 @@ export default function TherapistsPage() {
           onClick={(e) => { if (e.target === e.currentTarget) setSelected(null); }}>
           <div style={{ background: "#F8FAFC", width: "100%", maxWidth: 720, height: "100%", overflowY: "auto", boxShadow: "-8px 0 40px rgba(0,0,0,0.15)" }}>
 
-            {/* HEADER */}
             <div style={{ background: "#fff", padding: "20px 24px", borderBottom: "1px solid #E2E8F0", position: "sticky", top: 0, zIndex: 5 }}>
               <div style={{ display: "flex", alignItems: "flex-start", gap: 14 }}>
                 <Avatar name={selected.name} photo={selected.photo_url} size={56} />
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
                     <h2 style={{ fontSize: 20, fontWeight: 700, color: "#0F172A", margin: 0 }}>{selected.name || "Χωρίς όνομα"}</h2>
+                    <VisibilityBadge t={selected} />
                     <StatusBadge t={selected} />
                   </div>
                   <div style={{ fontSize: 12, color: "#64748B", marginTop: 4 }}>
                     {selected.specialty || "Χωρίς ειδικότητα"}{selected.area ? ` · ${selected.area}` : ""}
                   </div>
                 </div>
-                <div style={{ textAlign: "center", background: scoreColor(selected.score).bg, border: `1px solid ${scoreColor(selected.score).border}`, borderRadius: 12, padding: "10px 16px" }}>
-                  <div style={{ fontSize: 22, fontWeight: 700, color: scoreColor(selected.score).color, lineHeight: 1 }}>{selected.score}</div>
-                  <div style={{ fontSize: 10, color: scoreColor(selected.score).color, marginTop: 3 }}>{scoreColor(selected.score).label}</div>
+                <div style={{ textAlign: "center", background: scoreColor(selected.quality).bg, border: `1px solid ${scoreColor(selected.quality).border}`, borderRadius: 12, padding: "10px 16px" }}>
+                  <div style={{ fontSize: 22, fontWeight: 700, color: scoreColor(selected.quality).color, lineHeight: 1 }}>{selected.quality}</div>
+                  <div style={{ fontSize: 10, color: scoreColor(selected.quality).color, marginTop: 3 }}>{scoreColor(selected.quality).label}</div>
                 </div>
                 <button onClick={() => setSelected(null)} style={{ background: "transparent", border: "none", cursor: "pointer", color: "#94A3B8", padding: 4 }}>
                   <X size={22} />
                 </button>
               </div>
 
+              {!selected.isLive && (
+                <div style={{ marginTop: 12, padding: "10px 14px", background: "#FFF1F2", border: "1px solid #FECDD3", borderRadius: 8, fontSize: 12, color: "#9F1239", display: "flex", alignItems: "center", gap: 7 }}>
+                  <EyeOff size={14} strokeWidth={2.2} style={{ flexShrink: 0 }} />
+                  <span>
+                    <strong>Δεν εμφανίζεται στο site.</strong>{" "}
+                    {selected.is_paused
+                      ? "Είναι προσωρινά παγωμένος."
+                      : !selected.is_approved
+                        ? "Δεν έχει εγκριθεί ακόμα."
+                        : `Το προφίλ είναι ελλιπές (λείπουν ${selected.missingRequired.length}).`}
+                  </span>
+                </div>
+              )}
+
               {selected.is_paused && selected.paused_reason && (
-                <div style={{ marginTop: 12, padding: "10px 14px", background: "#F1F5F9", border: "1px solid #E2E8F0", borderRadius: 8, fontSize: 12, color: "#475569" }}>
-                  <strong>Παγωμένος:</strong> {selected.paused_reason}
+                <div style={{ marginTop: 8, padding: "10px 14px", background: "#F1F5F9", border: "1px solid #E2E8F0", borderRadius: 8, fontSize: 12, color: "#475569" }}>
+                  <strong>Λόγος παγώματος:</strong> {selected.paused_reason}
                 </div>
               )}
               {selected.application_status === "rejected" && selected.reject_reason_code && (
-                <div style={{ marginTop: 12, padding: "10px 14px", background: "#FFF1F2", border: "1px solid #FECDD3", borderRadius: 8, fontSize: 12, color: "#9F1239" }}>
+                <div style={{ marginTop: 8, padding: "10px 14px", background: "#FFF1F2", border: "1px solid #FECDD3", borderRadius: 8, fontSize: 12, color: "#9F1239" }}>
                   <strong>Απορρίφθηκε:</strong> {REJECT_REASONS[selected.reject_reason_code] || selected.reject_reason_code}
                 </div>
               )}
@@ -629,39 +689,34 @@ export default function TherapistsPage() {
               {tab === "check" && (
                 <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
 
-                  {/* Checklist */}
                   <div style={{ background: "#fff", border: "1px solid #E2E8F0", borderRadius: 14, padding: 20 }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 14 }}>
                       <Shield size={15} color="#1D4ED8" />
-                      <span style={{ fontSize: 13, fontWeight: 700, color: "#0F172A" }}>Checklist ελέγχου</span>
-                      <span style={{ marginLeft: "auto", fontSize: 12, fontWeight: 700, color: "#64748B" }}>
-                        {selected.checklist.filter((c) => c.ok).length}/{selected.checklist.length}
+                      <span style={{ fontSize: 13, fontWeight: 700, color: "#0F172A" }}>Υποχρεωτικά για δημόσια εμφάνιση</span>
+                      <span style={{ marginLeft: "auto", fontSize: 12, fontWeight: 700, color: selected.is_profile_complete ? "#15803D" : "#BE123C" }}>
+                        {selected.required.filter((c) => c.ok).length}/{selected.required.length}
                       </span>
                     </div>
 
-                    {selected.checklist.map((c) => (
+                    {selected.required.map((c) => (
                       <div key={c.key} style={{ display: "flex", alignItems: "center", gap: 10, padding: "9px 0", borderTop: "1px solid #F1F5F9" }}>
-                        <div style={{ width: 20, height: 20, borderRadius: "50%", background: c.ok ? "#D1FAE5" : (c.required ? "#FFE4E6" : "#F1F5F9"), display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                          {c.ok
-                            ? <Check size={12} color="#065F46" strokeWidth={3} />
-                            : <X size={12} color={c.required ? "#9F1239" : "#94A3B8"} strokeWidth={3} />}
+                        <div style={{ width: 20, height: 20, borderRadius: "50%", background: c.ok ? "#D1FAE5" : "#FFE4E6", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                          {c.ok ? <Check size={12} color="#065F46" strokeWidth={3} /> : <X size={12} color="#9F1239" strokeWidth={3} />}
                         </div>
-                        <span style={{ fontSize: 13, color: c.ok ? "#0F172A" : "#64748B", fontWeight: c.required ? 600 : 400, flex: 1 }}>
+                        <span style={{ fontSize: 13, color: c.ok ? "#0F172A" : "#64748B", fontWeight: 600, flex: 1 }}>
                           {c.label}
+                          {c.detail && (
+                            <span style={{ marginLeft: 7, fontSize: 12, fontWeight: 700, color: c.ok ? "#15803D" : "#BE123C" }}>
+                              {c.detail}
+                            </span>
+                          )}
                         </span>
-                        {c.required && !c.ok && (
-                          <span style={{ fontSize: 10, fontWeight: 700, color: "#9F1239", textTransform: "uppercase" }}>Υποχρεωτικό</span>
-                        )}
+
                         {c.key === "license_ver" && (
-                          <button onClick={toggleLicenseVerified} disabled={busy}
-                            style={{ padding: "4px 12px", borderRadius: 6, border: `1px solid ${c.ok ? "#E2E8F0" : "#BFDBFE"}`, background: c.ok ? "transparent" : "#EFF6FF", color: c.ok ? "#94A3B8" : "#1D4ED8", fontSize: 11, fontWeight: 600, cursor: busy ? "not-allowed" : "pointer", fontFamily: "inherit" }}>
+                          <button onClick={toggleLicenseVerified} disabled={busy || !selected.license_url}
+                            title={!selected.license_url ? "Πρέπει πρώτα να ανεβάσει άδεια" : ""}
+                            style={{ padding: "4px 12px", borderRadius: 6, border: `1px solid ${c.ok ? "#E2E8F0" : "#BFDBFE"}`, background: c.ok ? "transparent" : "#EFF6FF", color: !selected.license_url ? "#CBD5E1" : (c.ok ? "#94A3B8" : "#1D4ED8"), fontSize: 11, fontWeight: 600, cursor: busy || !selected.license_url ? "not-allowed" : "pointer", fontFamily: "inherit" }}>
                             {c.ok ? "Αναίρεση" : "Επιβεβαίωση"}
-                          </button>
-                        )}
-                        {c.key === "terms" && (
-                          <button onClick={toggleTerms} disabled={busy}
-                            style={{ padding: "4px 12px", borderRadius: 6, border: `1px solid ${c.ok ? "#E2E8F0" : "#BFDBFE"}`, background: c.ok ? "transparent" : "#EFF6FF", color: c.ok ? "#94A3B8" : "#1D4ED8", fontSize: 11, fontWeight: 600, cursor: busy ? "not-allowed" : "pointer", fontFamily: "inherit" }}>
-                            {c.ok ? "Αναίρεση" : "Καταγραφή"}
                           </button>
                         )}
                       </div>
@@ -674,18 +729,51 @@ export default function TherapistsPage() {
                     )}
                   </div>
 
-                  {/* Score breakdown */}
+                  <div style={{ background: "#fff", border: "1px solid #E2E8F0", borderRadius: 14, padding: 20 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
+                      <Award size={15} color="#4338CA" />
+                      <span style={{ fontSize: 13, fontWeight: 700, color: "#0F172A" }}>Προαιρετικά — badge «Πλήρες προφίλ»</span>
+                      <span style={{ marginLeft: "auto", fontSize: 12, fontWeight: 700, color: selected.is_profile_full ? "#4338CA" : "#94A3B8" }}>
+                        {selected.optional.filter((c) => c.ok).length}/{selected.optional.length}
+                      </span>
+                    </div>
+                    <div style={{ fontSize: 12, color: "#94A3B8", marginBottom: 12 }}>
+                      Χρειάζονται 4 από τα 7 για badge και ranking boost.
+                    </div>
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: 7 }}>
+                      {selected.optional.map((c) => (
+                        <span key={c.key} style={{
+                          display: "inline-flex", alignItems: "center", gap: 5,
+                          padding: "6px 12px", borderRadius: 30,
+                          border: `1px solid ${c.ok ? "#BBF7D0" : "#E2E8F0"}`,
+                          background: c.ok ? "#F0FDF4" : "#F8FAFC",
+                          color: c.ok ? "#15803D" : "#94A3B8",
+                          fontSize: 12, fontWeight: 600,
+                        }}>
+                          {c.ok ? <Check size={12} strokeWidth={3} /> : <X size={12} strokeWidth={2.5} />}
+                          {c.label}
+                        </span>
+                      ))}
+                    </div>
+                    {!selected.terms_accepted_at && (
+                      <button onClick={toggleTerms} disabled={busy}
+                        style={{ marginTop: 12, padding: "6px 14px", borderRadius: 6, border: "1px solid #BFDBFE", background: "#EFF6FF", color: "#1D4ED8", fontSize: 11, fontWeight: 600, cursor: busy ? "not-allowed" : "pointer", fontFamily: "inherit" }}>
+                        Καταγραφή αποδοχής όρων
+                      </button>
+                    )}
+                  </div>
+
                   <div style={{ background: "#fff", border: "1px solid #E2E8F0", borderRadius: 14, padding: 20 }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 14 }}>
                       <TrendingUp size={15} color="#1D4ED8" />
-                      <span style={{ fontSize: 13, fontWeight: 700, color: "#0F172A" }}>Quality Score: {selected.score}/100</span>
-                      <button onClick={saveScore} disabled={busy}
+                      <span style={{ fontSize: 13, fontWeight: 700, color: "#0F172A" }}>Quality Score: {selected.quality}/100</span>
+                      <button onClick={saveQuality} disabled={busy}
                         style={{ marginLeft: "auto", padding: "4px 12px", borderRadius: 6, border: "1px solid #E2E8F0", background: "transparent", color: "#64748B", fontSize: 11, fontWeight: 600, cursor: busy ? "not-allowed" : "pointer", fontFamily: "inherit" }}>
                         Αποθήκευση στη ΒΔ
                       </button>
                     </div>
                     {[
-                      ["Πληρότητα προφίλ", `${selected.checklist.filter((c) => c.ok).length}/${selected.checklist.length}`, 30],
+                      ["Πληρότητα προφίλ", `${selected.completeness_score || 0}%`, 30],
                       ["Επαληθευμένη άδεια", selected.license_verified ? "Ναι" : "Όχι", 20],
                       ["Ολοκληρωμένες συνεδρίες", selected.completedCount, 15],
                       ["Χαμηλές ακυρώσεις", `${selected.cancelledCount} ακυρώσεις`, 15],
@@ -699,25 +787,23 @@ export default function TherapistsPage() {
                     ))}
                   </div>
 
-                  {/* Tags */}
                   <div style={{ background: "#fff", border: "1px solid #E2E8F0", borderRadius: 14, padding: 20 }}>
                     <div style={{ fontSize: 13, fontWeight: 700, color: "#0F172A", marginBottom: 12, display: "flex", alignItems: "center", gap: 6 }}>
                       <Tag size={14} color="#1D4ED8" /> Support Tags
                     </div>
                     <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-                      {THERAPIST_TAGS.map((t) => {
-                        const on = (selected.support_tags || []).includes(t);
+                      {THERAPIST_TAGS.map((tg) => {
+                        const on = (selected.support_tags || []).includes(tg);
                         return (
-                          <button key={t} onClick={() => toggleTag(t)} disabled={busy}
+                          <button key={tg} onClick={() => toggleTag(tg)} disabled={busy}
                             style={{ padding: "6px 14px", borderRadius: 30, border: `1px solid ${on ? "#1D4ED8" : "#E2E8F0"}`, background: on ? "#EFF6FF" : "#fff", color: on ? "#1D4ED8" : "#64748B", fontSize: 12, fontWeight: 600, cursor: busy ? "not-allowed" : "pointer", fontFamily: "inherit" }}>
-                            {t}
+                            {tg}
                           </button>
                         );
                       })}
                     </div>
                   </div>
 
-                  {/* Admin comment */}
                   <div style={{ background: "#fff", border: "1px solid #E2E8F0", borderRadius: 14, padding: 20 }}>
                     <div style={{ fontSize: 13, fontWeight: 700, color: "#0F172A", marginBottom: 12, display: "flex", alignItems: "center", gap: 6 }}>
                       <MessageSquare size={14} color="#1D4ED8" /> Σημείωση admin
@@ -731,25 +817,27 @@ export default function TherapistsPage() {
                     </button>
                   </div>
 
-                  {/* ACTIONS */}
                   <div style={{ background: "#fff", border: "1px solid #E2E8F0", borderRadius: 14, padding: 20 }}>
                     <div style={{ fontSize: 13, fontWeight: 700, color: "#0F172A", marginBottom: 14 }}>Ενέργειες</div>
 
-                    {selected.missingRequired?.length > 0 && !selected.is_approved && (
+                    {!selected.is_profile_complete && (
                       <div style={{ padding: "12px 16px", background: "#FFF1F2", border: "1px solid #FECDD3", borderRadius: 10, marginBottom: 14 }}>
                         <div style={{ fontSize: 12, fontWeight: 700, color: "#9F1239", marginBottom: 6, display: "flex", alignItems: "center", gap: 5 }}>
-                          <AlertTriangle size={12} /> Δεν μπορεί να εγκριθεί — λείπουν:
+                          <AlertTriangle size={12} /> Δεν μπορεί να εμφανιστεί δημόσια — λείπουν:
                         </div>
                         {selected.missingRequired.map((m) => (
-                          <div key={m.key} style={{ fontSize: 12, color: "#9F1239", paddingLeft: 17 }}>· {m.label}</div>
+                          <div key={m.key} style={{ fontSize: 12, color: "#9F1239", paddingLeft: 17 }}>
+                            · {m.label}{m.detail ? ` (${m.detail})` : ""}
+                          </div>
                         ))}
                       </div>
                     )}
 
                     <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-                      {!selected.is_approved && selected.missingRequired?.length === 0 && (
-                        <button onClick={approve} disabled={busy}
-                          style={{ padding: "10px 20px", borderRadius: 8, border: "none", background: busy ? "#94A3B8" : "#15803D", color: "#fff", fontSize: 13, fontWeight: 600, cursor: busy ? "not-allowed" : "pointer", fontFamily: "inherit", display: "inline-flex", alignItems: "center", gap: 6 }}>
+                      {!selected.is_approved && (
+                        <button onClick={approve} disabled={busy || !selected.is_profile_complete}
+                          title={!selected.is_profile_complete ? "Το προφίλ είναι ελλιπές" : ""}
+                          style={{ padding: "10px 20px", borderRadius: 8, border: "none", background: busy || !selected.is_profile_complete ? "#CBD5E1" : "#15803D", color: "#fff", fontSize: 13, fontWeight: 600, cursor: busy || !selected.is_profile_complete ? "not-allowed" : "pointer", fontFamily: "inherit", display: "inline-flex", alignItems: "center", gap: 6 }}>
                           <CheckCircle2 size={14} /> Έγκριση
                         </button>
                       )}
@@ -796,10 +884,14 @@ export default function TherapistsPage() {
                       ["Τηλέφωνο", selected.phone],
                       ["Ειδικότητα", selected.specialty],
                       ["Κύρια περιοχή", selected.area],
-                      ["Περιοχές εξυπηρέτησης", (selected.service_areas || []).join(", ")],
+                      ["Περιοχές εξυπηρέτησης", Array.isArray(selected.service_areas) ? selected.service_areas.join(", ") : ""],
                       ["Τιμή συνεδρίας", selected.price_per_session ? `${selected.price_per_session}€` : ""],
                       ["Έτη εμπειρίας", selected.years_experience],
+                      ["Σπουδές", selected.education_school ? `${selected.education_school}${selected.education_year ? ` (${selected.education_year})` : ""}` : ""],
+                      ["Πτυχίο", selected.education_degree],
                       ["Παθήσεις", selected.conditionsCount ? `${selected.conditionsCount} καταχωρημένες` : ""],
+                      ["Διαθεσιμότητα", (selected.availability_slots || []).join(", ")],
+                      ["Χρόνος απόκρισης", selected.response_time_hours ? `${selected.response_time_hours} ώρες` : ""],
                       ["IBAN", selected.iban],
                       ["Δικαιούχος", selected.payout_name],
                       ["Αποδοχή όρων", selected.terms_accepted_at ? fmtDate(selected.terms_accepted_at) : ""],
@@ -813,7 +905,12 @@ export default function TherapistsPage() {
                   </div>
 
                   <div style={{ background: "#fff", border: "1px solid #E2E8F0", borderRadius: 14, padding: 20 }}>
-                    <div style={{ fontSize: 13, fontWeight: 700, color: "#0F172A", marginBottom: 10 }}>Βιογραφικό (bio)</div>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: "#0F172A", marginBottom: 10, display: "flex", alignItems: "center", gap: 6 }}>
+                      Βιογραφικό (bio)
+                      <span style={{ marginLeft: "auto", fontSize: 12, fontWeight: 700, color: (selected.bio || "").length >= 30 ? "#15803D" : "#BE123C" }}>
+                        {(selected.bio || "").length}/30 χαρακτήρες
+                      </span>
+                    </div>
                     <div style={{ fontSize: 13, color: selected.bio ? "#475569" : "#CBD5E1", lineHeight: 1.6, whiteSpace: "pre-wrap" }}>
                       {selected.bio || "Δεν έχει συμπληρωθεί bio."}
                     </div>
@@ -867,6 +964,21 @@ export default function TherapistsPage() {
                     )}
                   </div>
 
+                  {selected.education_school && (
+                    <div style={{ background: "#fff", border: "1px solid #E2E8F0", borderRadius: 14, padding: 20 }}>
+                      <div style={{ fontSize: 13, fontWeight: 700, color: "#0F172A", marginBottom: 10, display: "flex", alignItems: "center", gap: 6 }}>
+                        <GraduationCap size={14} color="#1D4ED8" /> Σπουδές
+                      </div>
+                      <div style={{ fontSize: 14, fontWeight: 600, color: "#0F172A" }}>
+                        {selected.education_degree || "Πτυχίο Φυσικοθεραπείας"}
+                      </div>
+                      <div style={{ fontSize: 13, color: "#64748B", marginTop: 2 }}>
+                        {selected.education_school}
+                        {selected.education_year ? ` · ${selected.education_year}` : ""}
+                      </div>
+                    </div>
+                  )}
+
                   <div style={{ fontSize: 11, color: "#94A3B8", textAlign: "center" }}>
                     Οι σύνδεσμοι είναι προσωρινοί (1 ώρα) και ασφαλείς.
                   </div>
@@ -905,7 +1017,7 @@ export default function TherapistsPage() {
               Σχόλιο (προαιρετικό)
             </label>
             <textarea value={rejectNote} onChange={(e) => setRejectNote(e.target.value)} rows={3}
-              placeholder="Λεπτομέρειες που θα βοηθήσουν σε τυχόν email προς τον θεραπευτή."
+              placeholder="Λεπτομέρειες για τυχόν email προς τον θεραπευτή."
               style={{ width: "100%", padding: "10px 14px", border: "1.5px solid #E2E8F0", borderRadius: 8, fontSize: 13, fontFamily: "inherit", outline: "none", color: "#0F172A", resize: "vertical", marginBottom: 20, boxSizing: "border-box" }} />
 
             <div style={{ display: "flex", gap: 10 }}>
