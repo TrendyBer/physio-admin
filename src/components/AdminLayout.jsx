@@ -2,12 +2,15 @@
 import { useState, useEffect } from "react";
 import { supabase } from "../lib/supabase";
 import {
-  LayoutDashboard, ClipboardList, CreditCard, Users, Star, FileText,
-  Heart, Package, FolderTree, Settings, LogOut, Lock,
+  LayoutDashboard, ListChecks, ClipboardList, CreditCard, Users, Stethoscope,
+  Star, FileText, Heart, Package, FolderTree, Settings, LogOut, Lock, User,
 } from "lucide-react";
 
 import AdminDashboard from "./AdminDashboard";
+import TasksPage from "./TasksPage";
 import UsersPage from "./UsersPage";
+import PatientsPage from "./PatientsPage";
+import TherapistsPage from "./TherapistsPage";
 import RequestsPage from "./RequestsPage";
 import PaymentsPage from "./PaymentsPage";
 import ReviewsPage from "./ReviewsPage";
@@ -18,12 +21,12 @@ import CMSPage from "./CMSPage";
 import PackagesPage from "./PackagesPage";
 
 // ─── NAV STRUCTURE ──────────────────────────────────────────────────────
-// Grouped into logical sections for cleaner navigation
 const NAV_SECTIONS = [
   {
-    section: null, // No header for main item
+    section: null,
     items: [
-      { id: "dashboard", label: "Dashboard", Icon: LayoutDashboard },
+      { id: "dashboard", label: "Dashboard",            Icon: LayoutDashboard },
+      { id: "tasks",     label: "Χρειάζονται Ενέργεια", Icon: ListChecks },
     ],
   },
   {
@@ -36,7 +39,9 @@ const NAV_SECTIONS = [
   {
     section: "Χρήστες",
     items: [
-      { id: "users", label: "Χρήστες", Icon: Users },
+      { id: "therapists", label: "Θεραπευτές", Icon: Stethoscope },
+      { id: "patients",   label: "Ασθενείς",   Icon: User },
+      { id: "users",      label: "Λογαριασμοί", Icon: Users },
     ],
   },
   {
@@ -50,14 +55,14 @@ const NAV_SECTIONS = [
   {
     section: "Διαμόρφωση",
     items: [
-      { id: "packages",   label: "Πακέτα",      Icon: Package },
-      { id: "categories", label: "Κατηγορίες",  Icon: FolderTree },
-      { id: "settings",   label: "Ρυθμίσεις",   Icon: Settings },
+      { id: "packages",   label: "Πακέτα",     Icon: Package },
+      { id: "categories", label: "Κατηγορίες", Icon: FolderTree },
+      { id: "settings",   label: "Ρυθμίσεις",  Icon: Settings },
     ],
   },
 ];
 
-function Sidebar({ activePage, onNavigate, adminEmail, onLogout }) {
+function Sidebar({ activePage, onNavigate, adminEmail, onLogout, taskCount }) {
   return (
     <aside style={{
       width: 240, minHeight: "100vh",
@@ -80,7 +85,6 @@ function Sidebar({ activePage, onNavigate, adminEmail, onLogout }) {
       <nav style={{ padding: "12px 12px", flex: 1, overflowY: "auto" }}>
         {NAV_SECTIONS.map((section, sectionIdx) => (
           <div key={sectionIdx} style={{ marginBottom: 14 }}>
-            {/* Section header */}
             {section.section && (
               <div style={{
                 fontSize: 10,
@@ -94,10 +98,10 @@ function Sidebar({ activePage, onNavigate, adminEmail, onLogout }) {
               </div>
             )}
 
-            {/* Section items */}
             {section.items.map(item => {
               const isActive = activePage === item.id;
               const ItemIcon = item.Icon;
+              const showBadge = item.id === "tasks" && taskCount > 0;
               return (
                 <div
                   key={item.id}
@@ -132,7 +136,21 @@ function Sidebar({ activePage, onNavigate, adminEmail, onLogout }) {
                   }}
                 >
                   <ItemIcon size={15} strokeWidth={isActive ? 2.2 : 2} />
-                  {item.label}
+                  <span style={{ flex: 1 }}>{item.label}</span>
+                  {showBadge && (
+                    <span style={{
+                      background: "#F59E0B",
+                      color: "#0F172A",
+                      fontSize: 10,
+                      fontWeight: 700,
+                      padding: "1px 7px",
+                      borderRadius: 999,
+                      minWidth: 18,
+                      textAlign: "center",
+                    }}>
+                      {taskCount}
+                    </span>
+                  )}
                 </div>
               );
             })}
@@ -178,6 +196,7 @@ export default function AdminLayout() {
   const [activePage, setActivePage] = useState("dashboard");
   const [authChecking, setAuthChecking] = useState(true);
   const [adminUser, setAdminUser] = useState(null);
+  const [taskCount, setTaskCount] = useState(0);
 
   useEffect(() => { checkAuth(); }, []);
 
@@ -203,6 +222,51 @@ export default function AdminLayout() {
 
     setAdminUser(user);
     setAuthChecking(false);
+    fetchTaskCount();
+  }
+
+  // Μετράει τις εκκρεμότητες για το badge στο sidebar
+  // ΠΡΟΣΟΧΗ: οι απλήρωτες προμήθειες διαβάζονται από τον πίνακα `payments`,
+  // ΟΧΙ από το session_requests.is_paid (που δεν χρησιμοποιείται).
+  async function fetchTaskCount() {
+    try {
+      const [
+        { data: reqs },
+        { data: therapists },
+        { data: reviews },
+        { data: bookings },
+        { data: payments },
+      ] = await Promise.all([
+        supabase.from("session_requests").select("id, status, therapist_id, type"),
+        supabase.from("therapist_profiles").select("id, is_approved, application_status"),
+        supabase.from("reviews").select("id, rating"),
+        supabase.from("session_bookings").select("request_id"),
+        supabase.from("payments").select("id, paid, status"),
+      ]);
+
+      const bookedIds = new Set((bookings || []).map(b => b.request_id));
+      const isCancelled = s => (s || "").startsWith("cancelled");
+
+      const unassigned = (reqs || []).filter(
+        r => !r.therapist_id && !isCancelled(r.status) && r.status !== "completed"
+      ).length;
+
+      const pendingTherapists = (therapists || []).filter(
+        t => !t.is_approved && t.application_status === "pending"
+      ).length;
+
+      const unpaid = (payments || []).filter(p => !p.paid).length;
+
+      const badReviews = (reviews || []).filter(rv => rv.rating < 3).length;
+
+      const confirmedNoSessions = (reqs || []).filter(
+        r => r.status === "confirmed" && !bookedIds.has(r.id)
+      ).length;
+
+      setTaskCount(unassigned + pendingTherapists + unpaid + badReviews + confirmedNoSessions);
+    } catch (_) {
+      setTaskCount(0);
+    }
   }
 
   async function handleLogout() {
@@ -214,7 +278,10 @@ export default function AdminLayout() {
   function renderPage() {
     switch (activePage) {
       case "dashboard":  return <AdminDashboard onNavigate={setActivePage} />;
+      case "tasks":      return <TasksPage onNavigate={setActivePage} />;
       case "users":      return <UsersPage />;
+      case "patients":   return <PatientsPage />;
+      case "therapists": return <TherapistsPage />;
       case "requests":   return <RequestsPage />;
       case "packages":   return <PackagesPage />;
       case "payments":   return <PaymentsPage />;
@@ -256,6 +323,7 @@ export default function AdminLayout() {
         onNavigate={setActivePage}
         adminEmail={adminUser?.email}
         onLogout={handleLogout}
+        taskCount={taskCount}
       />
       <main style={{ flex: 1, padding: "32px 36px", minWidth: 0 }}>
         {renderPage()}
