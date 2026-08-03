@@ -320,6 +320,7 @@ export default function SubscriptionsPage() {
       max_areas: form.max_areas === "" ? null : parseInt(form.max_areas, 10),
       featured_listing: !!form.featured_listing,
       priority_matching: !!form.priority_matching,
+      rank_weight: parseInt(form.rank_weight, 10) || 0,
       features_el: (form.features_text || "").split("\n").map((x) => x.trim()).filter(Boolean),
       badge_label: form.badge_label?.trim() || null,
       display_order: parseInt(form.display_order, 10) || 0,
@@ -569,6 +570,17 @@ export default function SubscriptionsPage() {
                     </div>
                   )}
 
+                  {num(p.rank_weight) > 0 && (
+                    <div style={{
+                      background: "#F5F3FF", border: "1px solid #DDD6FE", borderRadius: 10,
+                      padding: "8px 14px", marginBottom: 14,
+                      display: "flex", alignItems: "center", justifyContent: "space-between",
+                    }}>
+                      <span style={{ fontSize: 12, color: "#6D28D9", fontWeight: 600 }}>Προβάδισμα κατάταξης</span>
+                      <span style={{ fontSize: 14, fontWeight: 700, color: "#6D28D9" }}>+{p.rank_weight}</span>
+                    </div>
+                  )}
+
                   <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", paddingTop: 12, borderTop: "1px solid #F1F5F9" }}>
                     <span style={{ fontSize: 12, color: "#64748B" }}>
                       {count} {count === 1 ? "θεραπευτής" : "θεραπευτές"}
@@ -804,6 +816,7 @@ function PlanModal({ initial, onClose, onSave, onDelete, busy }) {
     code: "", name_el: "", name_en: "", description_el: "", description_en: "",
     price_monthly: 0, price_yearly: "", first_session_fee: 10,
     max_active_requests: "", max_areas: "", featured_listing: false, priority_matching: false,
+    rank_weight: 0,
     features_text: "", badge_label: "", display_order: 0, is_active: true,
     ...initial,
   });
@@ -872,6 +885,28 @@ function PlanModal({ initial, onClose, onSave, onDelete, busy }) {
         <TextArea value={f.features_text} onChange={(e) => upd("features_text", e.target.value)} rows={5}
           placeholder={"Απεριόριστα αιτήματα\nΠροβολή στην κορυφή\nΥποστήριξη κατά προτεραιότητα"} />
       </Field>
+
+      <Field
+        label="Βάρος κατάταξης"
+        hint="Πόντοι που προστίθενται στη σειρά εμφάνισης. 0 = καθαρή αξιοκρατία · 10 = ελαφρύ σπρώξιμο · 50 = ισχυρό · 200 = πάντα πρώτοι."
+      >
+        <div style={{ maxWidth: 160 }}>
+          <Input type="number" min={0} max={500} value={f.rank_weight} onChange={(e) => upd("rank_weight", e.target.value)} />
+        </div>
+      </Field>
+
+      <div style={{
+        background: num(f.rank_weight) >= 100 ? "#FFFBEB" : "#F8FAFC",
+        border: `1px solid ${num(f.rank_weight) >= 100 ? "#FDE68A" : "#E2E8F0"}`,
+        borderRadius: 12, padding: "12px 16px", marginBottom: 20,
+        fontSize: 12.5, color: num(f.rank_weight) >= 100 ? "#B45309" : "#64748B", lineHeight: 1.6,
+      }}>
+        {num(f.rank_weight) === 0
+          ? "Ουδέτερο: οι θεραπευτές αυτού του πακέτου κατατάσσονται μόνο βάσει βαθμολογίας, διαθεσιμότητας και εμπειρίας."
+          : num(f.rank_weight) >= 100
+            ? "Προσοχή: με τόσο υψηλό βάρος, ένας θεραπευτής με χαμηλή βαθμολογία θα εμφανίζεται πάνω από έναν άριστο δωρεάν. Χρήσιμο για έσοδα, ρίσκο για την εμπειρία του ασθενή."
+            : "Οι θεραπευτές αυτού του πακέτου ξεκινούν με προβάδισμα, αλλά μια πολύ καλή βαθμολογία μπορεί να το ξεπεράσει."}
+      </div>
 
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
         <Field label="Ετικέτα" hint="π.χ. Δημοφιλές">
