@@ -4,6 +4,7 @@ import { supabase } from "../lib/supabase";
 import {
   LayoutDashboard, ListChecks, ClipboardList, CreditCard, Users, Stethoscope,
   Star, FileText, Heart, Package, FolderTree, Settings, LogOut, Lock, User,
+  Repeat,
 } from "lucide-react";
 
 import AdminDashboard from "./AdminDashboard";
@@ -19,6 +20,7 @@ import SettingsPage from "./SettingsPage";
 import BlogPage from "./BlogPage";
 import CMSPage from "./CMSPage";
 import PackagesPage from "./PackagesPage";
+import SubscriptionsPage from "./SubscriptionsPage";
 
 // ─── NAV STRUCTURE ──────────────────────────────────────────────────────
 const NAV_SECTIONS = [
@@ -32,8 +34,9 @@ const NAV_SECTIONS = [
   {
     section: "Λειτουργία",
     items: [
-      { id: "requests",  label: "Αιτήματα",  Icon: ClipboardList },
-      { id: "payments",  label: "Πληρωμές",  Icon: CreditCard },
+      { id: "requests",      label: "Αιτήματα",   Icon: ClipboardList },
+      { id: "payments",      label: "Πληρωμές",   Icon: CreditCard },
+      { id: "subscriptions", label: "Συνδρομές",  Icon: Repeat },
     ],
   },
   {
@@ -285,6 +288,7 @@ export default function AdminLayout() {
       case "requests":   return <RequestsPage />;
       case "packages":   return <PackagesPage />;
       case "payments":   return <PaymentsPage />;
+      case "subscriptions": return <SubscriptionsPage />;
       case "reviews":    return <ReviewsPage />;
       case "categories": return <CategoriesPage />;
       case "settings":   return <SettingsPage />;
