@@ -1,6 +1,7 @@
 "use client";
 import { useState, useEffect } from "react";
 import { supabase } from "../lib/supabase";
+import { Home, Stethoscope, Users, Settings2, Monitor, Smartphone, RefreshCw, ExternalLink, Eye, EyeOff } from "lucide-react";
 
 const colors = {
   navy: "#0F172A", blue: "#2563EB", lightBlue: "#EFF6FF",
@@ -8,10 +9,10 @@ const colors = {
 };
 
 const PAGES = [
-  { id: "homepage", label: "🏠 Homepage" },
-  { id: "services", label: "⚕️ Υπηρεσίες" },
-  { id: "therapists", label: "👨‍⚕️ Θεραπευτές" },
-  { id: "howitworks", label: "⚙️ How It Works" },
+  { id: "homepage", label: "Homepage", Icon: Home, path: "/" },
+  { id: "services", label: "Υπηρεσίες", Icon: Stethoscope, path: "/services" },
+  { id: "therapists", label: "Θεραπευτές", Icon: Users, path: "/therapists" },
+  { id: "howitworks", label: "How It Works", Icon: Settings2, path: "/how-it-works" },
 ];
 
 const SECTIONS = {
@@ -51,6 +52,10 @@ export default function CMSPage() {
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [previewKey, setPreviewKey] = useState(0);
+  const [showPreview, setShowPreview] = useState(true);
+  const [previewMode, setPreviewMode] = useState("auto");
+  const [previewWidth, setPreviewWidth] = useState("desktop");
 
   useEffect(() => { fetchContent(); }, [activePage, activeSection]);
 
@@ -83,6 +88,7 @@ export default function CMSPage() {
     } else {
       setSaved(true);
       setTimeout(() => setSaved(false), 2000);
+      setPreviewKey((k) => k + 1);
       await fetchContent();
     }
     setSaving(false);
@@ -104,36 +110,65 @@ export default function CMSPage() {
 
   const sections = SECTIONS[activePage] || [];
 
+  const PROD = "https://physio-site2.vercel.app";
+  const LOCAL = "http://localhost:3000";
+  const detected =
+    typeof window !== "undefined" && ["localhost", "127.0.0.1"].includes(window.location.hostname)
+      ? LOCAL : PROD;
+  const base = previewMode === "prod" ? PROD : previewMode === "local" ? LOCAL : detected;
+  const currentPath = (PAGES.find((p) => p.id === activePage) || {}).path || "/";
+  const previewUrl = `${base}${currentPath}${currentPath.includes("?") ? "&" : "?"}cmsPreview=${previewKey}`;
+
+  const modeBtn = (id, label) => (
+    <button onClick={() => setPreviewMode(id)}
+      style={{ padding: "4px 10px", borderRadius: 6, border: "none", fontSize: 11, fontWeight: 700, cursor: "pointer", fontFamily: "inherit",
+        background: previewMode === id ? "#0F172A" : "transparent", color: previewMode === id ? "#fff" : "#64748B" }}>
+      {label}
+    </button>
+  );
+
   return (
     <div style={{ padding: 24 }}>
-      <div style={{ marginBottom: 24 }}>
-        <h1 style={{ fontSize: 24, fontWeight: 700, color: colors.navy }}>CMS - Διαχείριση Περιεχομένου</h1>
-        <p style={{ fontSize: 14, color: colors.gray }}>Επεξεργασία κειμένων και εικόνων του site</p>
-      </div>
-
-      <div style={{ display: "flex", gap: 8, marginBottom: 24, flexWrap: "wrap" }}>
-        {PAGES.map(p => (
-          <button key={p.id} onClick={() => { setActivePage(p.id); setActiveSection(SECTIONS[p.id][0].id); }}
-            style={{ padding: "8px 20px", borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: "pointer", background: activePage === p.id ? colors.navy : "#fff", color: activePage === p.id ? "#fff" : colors.gray, border: `1px solid ${colors.border}` }}>
-            {p.label}
+      <div style={{ marginBottom: 20, display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 16, flexWrap: "wrap" }}>
+        <div>
+          <h1 style={{ fontSize: 26, fontWeight: 700, color: "#0F172A", margin: 0 }}>Επεξεργασία Site</h1>
+          <p style={{ fontSize: 13, color: "#94A3B8", marginTop: 4 }}>Κείμενα και εικόνες του site, με ζωντανή προεπισκόπηση</p>
+        </div>
+        {!showPreview && (
+          <button onClick={() => setShowPreview(true)}
+            style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "9px 16px", borderRadius: 8, border: "1px solid #E2E8F0", background: "#fff", color: "#1D4ED8", fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>
+            <Eye size={15} /> Εμφάνιση preview
           </button>
-        ))}
+        )}
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "220px 1fr", gap: 24 }}>
-        <div style={{ background: "#fff", border: `1px solid ${colors.border}`, borderRadius: 12, padding: 16, height: "fit-content" }}>
-          <div style={{ fontSize: 12, fontWeight: 700, color: colors.gray, textTransform: "uppercase", letterSpacing: ".05em", marginBottom: 12 }}>Sections</div>
-          {sections.map(s => (
-            <button key={s.id} onClick={() => setActiveSection(s.id)}
-              style={{ width: "100%", textAlign: "left", padding: "10px 14px", borderRadius: 8, border: "none", fontSize: 14, cursor: "pointer", marginBottom: 4, background: activeSection === s.id ? colors.lightBlue : "transparent", color: activeSection === s.id ? colors.blue : colors.navy, fontWeight: activeSection === s.id ? 600 : 400 }}>
-              {s.label}
+      <div style={{ display: "flex", gap: 8, marginBottom: 20, flexWrap: "wrap" }}>
+        {PAGES.map((p) => {
+          const PIcon = p.Icon;
+          const active = activePage === p.id;
+          return (
+            <button key={p.id} onClick={() => { setActivePage(p.id); setActiveSection(SECTIONS[p.id][0].id); }}
+              style={{ padding: "8px 18px", borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: "pointer", background: active ? "#0F172A" : "#fff", color: active ? "#fff" : "#64748B", border: "1px solid #E2E8F0", display: "inline-flex", alignItems: "center", gap: 7, fontFamily: "inherit" }}>
+              <PIcon size={15} /> {p.label}
+            </button>
+          );
+        })}
+      </div>
+
+      <div style={{ display: "grid", gridTemplateColumns: showPreview ? "170px minmax(0, 1fr) minmax(0, 1fr)" : "220px 1fr", gap: 20, alignItems: "start" }}>
+        <div style={{ background: "#fff", border: "1px solid #E2E8F0", borderRadius: 12, padding: 14, position: "sticky", top: 16 }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: "#94A3B8", textTransform: "uppercase", letterSpacing: ".06em", marginBottom: 10 }}>Sections</div>
+          {sections.map((sec) => (
+            <button key={sec.id} onClick={() => setActiveSection(sec.id)}
+              style={{ width: "100%", textAlign: "left", padding: "9px 12px", borderRadius: 8, border: "none", fontSize: 13, cursor: "pointer", marginBottom: 3, background: activeSection === sec.id ? "#EFF6FF" : "transparent", color: activeSection === sec.id ? "#1D4ED8" : "#0F172A", fontWeight: activeSection === sec.id ? 600 : 500, fontFamily: "inherit" }}>
+              {sec.label}
             </button>
           ))}
         </div>
 
-        <div style={{ background: "#fff", border: `1px solid ${colors.border}`, borderRadius: 12, padding: 24 }}>
+        <div style={{ background: "#fff", border: "1px solid #E2E8F0", borderRadius: 12, padding: 22, minWidth: 0 }}>
           {loading ? (
-            <div style={{ textAlign: "center", color: colors.gray, padding: 40 }}>Φόρτωση...</div>
+            <div style={{ textAlign: "center", color: "#64748B", padding: 40 }}>Φόρτωση...</div>
           ) : (
             <SectionEditor
               page={activePage}
@@ -147,6 +182,56 @@ export default function CMSPage() {
             />
           )}
         </div>
+
+        {showPreview && (
+          <div style={{ position: "sticky", top: 16 }}>
+            <div style={{ background: "#fff", border: "1px solid #E2E8F0", borderRadius: 12, overflow: "hidden" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 10px", borderBottom: "1px solid #F1F5F9", flexWrap: "wrap" }}>
+                <div style={{ display: "flex", gap: 2, background: "#F1F5F9", borderRadius: 8, padding: 2 }}>
+                  {modeBtn("auto", "Auto")}
+                  {modeBtn("prod", "Live")}
+                  {modeBtn("local", "Local")}
+                </div>
+                <div style={{ display: "flex", gap: 2, background: "#F1F5F9", borderRadius: 8, padding: 2 }}>
+                  <button onClick={() => setPreviewWidth("desktop")} title="Desktop"
+                    style={{ padding: "5px 8px", borderRadius: 6, border: "none", cursor: "pointer", background: previewWidth === "desktop" ? "#0F172A" : "transparent", color: previewWidth === "desktop" ? "#fff" : "#64748B", display: "flex" }}>
+                    <Monitor size={14} />
+                  </button>
+                  <button onClick={() => setPreviewWidth("mobile")} title="Mobile"
+                    style={{ padding: "5px 8px", borderRadius: 6, border: "none", cursor: "pointer", background: previewWidth === "mobile" ? "#0F172A" : "transparent", color: previewWidth === "mobile" ? "#fff" : "#64748B", display: "flex" }}>
+                    <Smartphone size={14} />
+                  </button>
+                </div>
+                <div style={{ marginLeft: "auto", display: "flex", gap: 4 }}>
+                  <button onClick={() => setPreviewKey((k) => k + 1)} title="Ανανέωση"
+                    style={{ padding: "6px", borderRadius: 6, border: "1px solid #E2E8F0", background: "#fff", color: "#475569", cursor: "pointer", display: "flex" }}>
+                    <RefreshCw size={14} />
+                  </button>
+                  <button onClick={() => window.open(previewUrl, "_blank")} title="Άνοιγμα σε νέα καρτέλα"
+                    style={{ padding: "6px", borderRadius: 6, border: "1px solid #E2E8F0", background: "#fff", color: "#475569", cursor: "pointer", display: "flex" }}>
+                    <ExternalLink size={14} />
+                  </button>
+                  <button onClick={() => setShowPreview(false)} title="Απόκρυψη"
+                    style={{ padding: "6px", borderRadius: 6, border: "1px solid #E2E8F0", background: "#fff", color: "#475569", cursor: "pointer", display: "flex" }}>
+                    <EyeOff size={14} />
+                  </button>
+                </div>
+              </div>
+
+              <div style={{ height: "calc(100vh - 210px)", minHeight: 420, background: "#F8FAFC", display: "flex", justifyContent: "center", overflow: "auto" }}>
+                <iframe
+                  key={previewKey}
+                  src={previewUrl}
+                  title="Site preview"
+                  style={{ width: previewWidth === "mobile" ? 390 : "100%", height: "100%", border: "none", background: "#fff" }}
+                />
+              </div>
+            </div>
+            <div style={{ fontSize: 11, color: "#94A3B8", marginTop: 8, textAlign: "center" }}>
+              Πάτα «Αποθήκευση» και το preview ανανεώνεται αυτόματα.
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -168,10 +253,10 @@ function SectionEditor({ page, section, content, onSave, onUpload, saving, uploa
           {section.charAt(0).toUpperCase() + section.slice(1).replace(/_/g, " ")}
         </h2>
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-          {saved && <span style={{ fontSize: 13, color: "#10B981", fontWeight: 600 }}>✓ Αποθηκεύτηκε!</span>}
+          {saved && <span style={{ fontSize: 13, color: "#15803D", fontWeight: 600 }}>Αποθηκεύτηκε</span>}
           <button onClick={() => onSave(elData, enData)} disabled={saving}
-            style={{ padding: "10px 24px", borderRadius: 8, border: "none", background: saving ? "#94A3B8" : "#2563EB", color: "#fff", fontSize: 14, fontWeight: 600, cursor: saving ? "not-allowed" : "pointer" }}>
-            {saving ? "Αποθήκευση..." : "💾 Αποθήκευση"}
+            style={{ padding: "10px 24px", borderRadius: 8, border: "none", background: saving ? "#94A3B8" : "#1D4ED8", color: "#fff", fontSize: 14, fontWeight: 600, cursor: saving ? "not-allowed" : "pointer", fontFamily: "inherit" }}>
+            {saving ? "Αποθήκευση..." : "Αποθήκευση"}
           </button>
         </div>
       </div>
@@ -236,7 +321,7 @@ function ImageUpload({ value, onChange, onUpload, uploading }) {
       {value ? (
         <img src={value} alt="" style={{ width: 120, height: 80, objectFit: "cover", borderRadius: 8, border: "1px solid #E2E8F0" }} />
       ) : (
-        <div style={{ width: 120, height: 80, borderRadius: 8, border: "1px solid #E2E8F0", background: "#F8FAFC", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 24 }}>📷</div>
+        <div style={{ width: 120, height: 80, borderRadius: 8, border: "1px solid #E2E8F0", background: "#F8FAFC", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 24 }}></div>
       )}
       <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
         <label style={{ background: "#2563EB", color: "#fff", padding: "8px 16px", borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: uploading ? "not-allowed" : "pointer", display: "inline-block" }}>
@@ -248,7 +333,7 @@ function ImageUpload({ value, onChange, onUpload, uploading }) {
           style={{ padding: "6px 10px", border: "1px solid #E2E8F0", borderRadius: 6, fontSize: 12, width: 220 }} />
         {value && (
           <button onClick={() => onChange("")} style={{ background: "#FEF2F2", color: "#EF4444", border: "1px solid #FEE2E2", borderRadius: 6, padding: "4px 10px", fontSize: 12, cursor: "pointer" }}>
-            🗑 Αφαίρεση
+             Αφαίρεση
           </button>
         )}
       </div>
@@ -428,7 +513,7 @@ function FaqEditor({ elData, enData, setElData, setEnData }) {
         <div key={i} style={{ border: "1px solid #E2E8F0", borderRadius: 10, padding: 16, marginBottom: 12 }}>
           <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 10 }}>
             <div style={{ fontSize: 13, fontWeight: 700, color: "#0F172A" }}>FAQ {i + 1}</div>
-            <button onClick={() => removeFaq(i)} style={{ background: "#FEF2F2", color: "#EF4444", border: "none", borderRadius: 6, padding: "4px 10px", fontSize: 12, cursor: "pointer" }}>🗑</button>
+            <button onClick={() => removeFaq(i)} style={{ background: "#FEF2F2", color: "#EF4444", border: "none", borderRadius: 6, padding: "4px 10px", fontSize: 12, cursor: "pointer" }}></button>
           </div>
           <Field label="Ερώτηση"><Input value={faq.q} onChange={v => updFaq(i, "q", v)} /></Field>
           <Field label="Απάντηση"><Textarea value={faq.a} onChange={v => updFaq(i, "a", v)} rows={2} /></Field>
@@ -709,7 +794,7 @@ function HIWFaqEditor({ elData, enData, setElData, setEnData }) {
         <div key={i} style={{ border: "1px solid #E2E8F0", borderRadius: 10, padding: 16, marginBottom: 12 }}>
           <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 10 }}>
             <div style={{ fontSize: 13, fontWeight: 700, color: "#0F172A" }}>FAQ {i + 1}</div>
-            <button onClick={() => removeFaq(i)} style={{ background: "#FEF2F2", color: "#EF4444", border: "none", borderRadius: 6, padding: "4px 10px", fontSize: 12, cursor: "pointer" }}>🗑</button>
+            <button onClick={() => removeFaq(i)} style={{ background: "#FEF2F2", color: "#EF4444", border: "none", borderRadius: 6, padding: "4px 10px", fontSize: 12, cursor: "pointer" }}></button>
           </div>
           <Field label="Ερώτηση"><Input value={faq.q} onChange={v => updFaq(i, "q", v)} /></Field>
           <Field label="Απάντηση"><Textarea value={faq.a} onChange={v => updFaq(i, "a", v)} rows={2} /></Field>
