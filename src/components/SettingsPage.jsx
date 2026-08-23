@@ -3,7 +3,7 @@ import { useState, useEffect } from "react";
 import { supabase } from "../lib/supabase";
 import {
   Info, Save, Check, AlertTriangle, Repeat, Bell, User, SlidersHorizontal,
-  Eye, EyeOff, Ban, Clock, TrendingUp, Mail,
+  Eye, EyeOff, Ban, Clock, TrendingUp, Mail, Inbox,
 } from "lucide-react";
 
 const num = (v) => (v === null || v === undefined || v === "" ? 0 : Number(v));
@@ -124,6 +124,7 @@ export default function SettingsPage() {
   const [settings, setSettings] = useState({
     platform_name: "PhysioHome",
     email: "info@physiohome.gr",
+    contact_email: "",
     phone: "210-123-4567",
     address: "Αθήνα, Ελλάδα",
     commission: "3",
@@ -307,6 +308,37 @@ export default function SettingsPage() {
             </div>
           </Field>
 
+          {/* ── Παραλήπτης φόρμας επικοινωνίας ─────────────────────── */}
+          <div style={{ borderTop: "1px solid #F1F5F9", marginTop: 4, paddingTop: 20 }}>
+            <Note tone="warn" Icon={Inbox}>
+              Αυτό <strong>δεν</strong> είναι το email που βλέπουν οι επισκέπτες — είναι το
+              κουτί όπου φτάνουν τα μηνύματα της φόρμας. Άλλαξέ το εδώ και ο παραλήπτης
+              αλλάζει αμέσως, χωρίς deploy.
+              <br /><br />
+              Όσο <strong>δεν έχεις verified domain στο Resend</strong>, βάλε εδώ ακριβώς το
+              email με το οποίο έκανες εγγραφή στο Resend — αλλιώς η αποστολή αποτυγχάνει
+              με σφάλμα 403.
+            </Note>
+
+            <div style={{ maxWidth: 400 }}>
+              <Field
+                label="Email παραλήπτη φόρμας"
+                hint={
+                  settings.contact_email
+                    ? "Τα μηνύματα της φόρμας πάνε εδώ."
+                    : "Κενό: χρησιμοποιείται το Email Επικοινωνίας παραπάνω."
+                }
+              >
+                <Input
+                  type="email"
+                  value={settings.contact_email}
+                  onChange={(e) => upd("contact_email", e.target.value)}
+                  placeholder="to-gmail-sou@gmail.com"
+                />
+              </Field>
+            </div>
+          </div>
+
           <SaveButton onClick={saveSettings} saving={saving} saved={saved} />
         </Section>
       )}
@@ -425,7 +457,7 @@ export default function SettingsPage() {
         <Section title="Email Ειδοποιήσεις">
           <div style={{ maxWidth: 440 }}>
             <p style={{ fontSize: 13, color: "#64748B", marginBottom: 20 }}>
-              Emails στο <strong>{settings.email}</strong>
+              Emails στο <strong>{settings.contact_email || settings.email}</strong>
             </p>
             <Toggle checked={notifications.newRequest}      onChange={() => setNotifications((p) => ({ ...p, newRequest: !p.newRequest }))}           label="Νέο αίτημα ασθενή" />
             <Toggle checked={notifications.newTherapist}    onChange={() => setNotifications((p) => ({ ...p, newTherapist: !p.newTherapist }))}       label="Νέα εγγραφή θεραπευτή" />
