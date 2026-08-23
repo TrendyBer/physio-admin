@@ -4,6 +4,7 @@ import { supabase } from "../lib/supabase";
 import {
   LayoutDashboard, ListChecks, ClipboardList, CreditCard, Users,
   Star, FileText, Heart, Package, FolderTree, Settings, LogOut, Lock,
+  Repeat,
 } from "lucide-react";
 
 import AdminDashboard from "./AdminDashboard";
@@ -17,6 +18,7 @@ import SettingsPage from "./SettingsPage";
 import BlogPage from "./BlogPage";
 import CMSPage from "./CMSPage";
 import PackagesPage from "./PackagesPage";
+import SubscriptionsPage from "./SubscriptionsPage";
 
 // ─── NAV STRUCTURE ──────────────────────────────────────────────────────
 // Grouped into logical sections for cleaner navigation
@@ -52,9 +54,12 @@ const NAV_SECTIONS = [
   {
     section: "Διαμόρφωση",
     items: [
-      { id: "packages",   label: "Πακέτα",      Icon: Package },
-      { id: "categories", label: "Κατηγορίες",  Icon: FolderTree },
-      { id: "settings",   label: "Ρυθμίσεις",   Icon: Settings },
+      // Οι συνδρομές θεραπευτών — ΔΙΑΦΟΡΕΤΙΚΟ από τα Πακέτα, που είναι
+      // τα πακέτα συνεδριών που αγοράζει ο ασθενής.
+      { id: "subscriptions", label: "Συνδρομές",   Icon: Repeat },
+      { id: "packages",      label: "Πακέτα",      Icon: Package },
+      { id: "categories",    label: "Κατηγορίες",  Icon: FolderTree },
+      { id: "settings",      label: "Ρυθμίσεις",   Icon: Settings },
     ],
   },
 ];
@@ -274,19 +279,20 @@ export default function AdminLayout() {
 
   function renderPage() {
     switch (activePage) {
-      case "dashboard":  return <AdminDashboard onNavigate={setActivePage} />;
-      case "tasks":      return <TasksPage onNavigate={setActivePage} />;
-      case "users":      return <UsersPage />;
-      case "therapists": return <UsersPage />;
-      case "requests":   return <RequestsPage />;
-      case "packages":   return <PackagesPage />;
-      case "payments":   return <PaymentsPage />;
-      case "reviews":    return <ReviewsPage />;
-      case "categories": return <CategoriesPage />;
-      case "settings":   return <SettingsPage />;
-      case "blog":       return <BlogPage />;
-      case "cms":        return <CMSPage />;
-      default:           return <AdminDashboard onNavigate={setActivePage} />;
+      case "dashboard":     return <AdminDashboard onNavigate={setActivePage} />;
+      case "tasks":         return <TasksPage onNavigate={setActivePage} />;
+      case "users":         return <UsersPage />;
+      case "therapists":    return <UsersPage />;
+      case "requests":      return <RequestsPage />;
+      case "subscriptions": return <SubscriptionsPage />;
+      case "packages":      return <PackagesPage />;
+      case "payments":      return <PaymentsPage />;
+      case "reviews":       return <ReviewsPage />;
+      case "categories":    return <CategoriesPage />;
+      case "settings":      return <SettingsPage />;
+      case "blog":          return <BlogPage />;
+      case "cms":           return <CMSPage />;
+      default:              return <AdminDashboard onNavigate={setActivePage} />;
     }
   }
 
