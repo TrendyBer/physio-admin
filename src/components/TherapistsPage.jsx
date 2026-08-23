@@ -52,7 +52,7 @@ function buildContactRows(rec, fmtDate) {
 import {
   CheckCircle2, XCircle, AlertTriangle, Circle, FileText, Award, Eye,
   Search, Trash2, Pause, Play, Tag, Mail, Phone, MapPin, Euro, X,
-  ShieldCheck, User, Star, Download,
+  ShieldCheck, User, Star, Download, EyeOff,
 } from "lucide-react";
 import { exportToCsv, csvDate } from "../lib/exportCsv";
 
@@ -86,20 +86,30 @@ const THERAPIST_TAGS = [
 ];
 
 // ─── VERIFICATION CHECKLIST ─────────────────────────────────────────────────
-// Κάθε item: τι ελέγχουμε, αν είναι υποχρεωτικό, και πώς το τσεκάρουμε
+// ΠΡΟΣΟΧΗ: αυτή η λίστα ΠΡΕΠΕΙ να συμφωνεί με τη function
+// calc_profile_completeness() στη βάση. Αν αποκλίνουν, το admin θα δείχνει
+// «όλα εντάξει» ενώ ο θεραπευτής θα παραμένει κρυφός στο site.
+//
+// Τα 9 ΥΠΟΧΡΕΩΤΙΚΑ της βάσης:
+//   name(>2), photo_url, license_url, license_verified, specialty(>3),
+//   bio(>=30), conditions(>=3), area ή service_areas, price_per_session(>0)
 const CHECKLIST = [
-  { key: "name",        label: "Προσωπικά στοιχεία",        required: true,  check: t => !!t.name },
-  { key: "photo",       label: "Φωτογραφία προφίλ",         required: false, check: t => !!t.photo_url },
+  { key: "name",        label: "Προσωπικά στοιχεία",        required: true,  check: t => !!t.name && t.name.trim().length > 2 },
+  { key: "photo",       label: "Φωτογραφία προφίλ",         required: true,  check: t => !!t.photo_url },
   { key: "license",     label: "Άδεια ασκήσεως ανεβασμένη", required: true,  check: t => !!t.license_url },
   { key: "license_ver", label: "Άδεια ελέγχθηκε από admin", required: true,  check: t => !!t.license_verified },
-  { key: "specialty",   label: "Ειδικότητα",                required: true,  check: t => !!t.specialty },
-  { key: "areas",       label: "Περιοχές εξυπηρέτησης",     required: true,  check: t => !!t.area || (t.service_areas || []).length > 0 },
-  { key: "price",       label: "Τιμή συνεδρίας",            required: true,  check: t => !!t.price_per_session },
-  { key: "bio",         label: "Βιογραφικό",                required: false, check: t => !!t.bio && t.bio.trim().length > 20 },
-  { key: "experience",  label: "Χρόνια εμπειρίας",          required: false, check: t => !!t.years_experience },
-  { key: "cv",          label: "CV / Βιογραφικό αρχείο",    required: false, check: t => !!t.cv_url },
+  { key: "specialty",   label: "Ειδικότητα",                required: true,  check: t => !!t.specialty && t.specialty.trim().length > 3 },
+  { key: "bio",         label: "Βιογραφικό (30+ χαρακτ.)",  required: true,  check: t => !!t.bio && t.bio.trim().length >= 30 },
+  { key: "conditions",  label: "Παθήσεις (3+)",             required: true,  check: t => (t.conditions_count || 0) >= 3 },
+  { key: "areas",       label: "Περιοχές εξυπηρέτησης",     required: true,  check: t => (!!t.area && t.area.trim().length > 2) || (t.service_areas || []).length > 0 },
+  { key: "price",       label: "Τιμή συνεδρίας",            required: true,  check: t => Number(t.price_per_session) > 0 },
+  { key: "education",   label: "Σχολή / Εκπαίδευση",        required: false, check: t => !!t.education_school && t.education_school.trim().length > 3 },
   { key: "certs",       label: "Πιστοποιήσεις",             required: false, check: t => (t.certifications_urls || []).length > 0 },
-  { key: "contact",     label: "Στοιχεία επικοινωνίας",     required: false, check: t => !!t.email || !!t.phone },
+  { key: "cv",          label: "CV / Βιογραφικό αρχείο",    required: false, check: t => !!t.cv_url },
+  { key: "experience",  label: "Χρόνια εμπειρίας",          required: false, check: t => Number(t.years_experience) > 0 },
+  { key: "availability",label: "Διαθεσιμότητα",             required: false, check: t => (t.availability_slots || []).length > 0 },
+  { key: "iban",        label: "IBAN",                      required: false, check: t => !!t.iban && t.iban.trim().length > 5 },
+  { key: "terms",       label: "Αποδοχή όρων",              required: false, check: t => !!t.terms_accepted_at },
 ];
 
 function checklistStats(t) {
@@ -107,6 +117,14 @@ function checklistStats(t) {
   const requiredDone = CHECKLIST.filter(c => c.required && c.check(t)).length;
   const requiredTotal = CHECKLIST.filter(c => c.required).length;
   return { done, total: CHECKLIST.length, requiredDone, requiredTotal, canApprove: requiredDone === requiredTotal };
+}
+
+// Πραγματική δημόσια ορατότητα — ίδια λογική με το v_public_therapists.
+// ΔΕΝ αρκεί το is_approved: χρειάζεται και πλήρες προφίλ Ή admin override.
+function isPubliclyVisible(t) {
+  return !!t.is_approved
+    && !t.is_paused
+    && (!!t.is_profile_complete || !!t.admin_visibility_override);
 }
 
 function Badge({ label, bg, color }) {
@@ -203,6 +221,7 @@ function ProfileModal({ therapist, onClose, onRefresh }) {
   const status = therapist.is_approved ? "approved" : (therapist.application_status || "incomplete");
   const st = APP_STATUS[status] || APP_STATUS.incomplete;
   const stats = checklistStats(therapist);
+  const visible = isPubliclyVisible(therapist);
 
   const hasLicense = !!therapist.license_url;
   const hasCv = !!therapist.cv_url;
@@ -238,17 +257,24 @@ function ProfileModal({ therapist, onClose, onRefresh }) {
       is_approved: true,
       application_status: "approved",
       reject_reason_code: null,
+      is_paused: false,
     }).eq("id", therapist.id);
     setBusy(false);
     await onRefresh();
     onClose();
   }
 
-  // Χειροκίνητη ενεργοποίηση — παρακάμπτει το checklist
+  // Χειροκίνητη ενεργοποίηση — παρακάμπτει ΤΑ ΠΑΝΤΑ.
+  //
+  // ΚΡΙΣΙΜΟ: το is_approved ΜΟΝΟ του ΔΕΝ αρκεί. Το site φιλτράρει με
+  // is_publicly_visible, που απαιτεί is_profile_complete = true Ή
+  // admin_visibility_override = true. Το is_profile_complete το ελέγχει
+  // trigger στη βάση και επανέρχεται σε false με κάθε αλλαγή προφίλ —
+  // γι' αυτό υπάρχει ξεχωριστή στήλη override που ο trigger δεν αγγίζει.
   async function forceActivate() {
     const missing = CHECKLIST.filter(c => c.required && !c.check(therapist)).map(c => c.label);
     const msg = missing.length
-      ? `Λείπουν υποχρεωτικά στοιχεία:\n\n- ${missing.join("\n- ")}\n\nΘέλετε σίγουρα να ενεργοποιήσετε τον θεραπευτή; Θα εμφανίζεται κανονικά στο site.`
+      ? `Λείπουν υποχρεωτικά στοιχεία:\n\n- ${missing.join("\n- ")}\n\nΘέλετε σίγουρα να τον ενεργοποιήσετε; Θα εμφανίζεται κανονικά στο site με όσα στοιχεία έχει.`
       : "Ενεργοποίηση θεραπευτή;";
     if (!confirm(msg)) return;
     setBusy(true);
@@ -256,6 +282,25 @@ function ProfileModal({ therapist, onClose, onRefresh }) {
       is_approved: true,
       application_status: "approved",
       reject_reason_code: null,
+      is_paused: false,
+      admin_visibility_override: true,
+      admin_override_at: new Date().toISOString(),
+      admin_override_note: missing.length ? `Χειροκίνητη ενεργοποίηση. Έλειπαν: ${missing.join(", ")}` : "Χειροκίνητη ενεργοποίηση",
+    }).eq("id", therapist.id);
+    setBusy(false);
+    await onRefresh();
+    onClose();
+  }
+
+  // Αφαίρεση override — ο θεραπευτής επιστρέφει στους κανονικούς κανόνες.
+  // Αν το προφίλ του είναι ελλιπές, θα κρυφτεί ξανά από το site.
+  async function removeOverride() {
+    if (!confirm("Αφαίρεση χειροκίνητης ενεργοποίησης;\n\nΑν το προφίλ του είναι ελλιπές, θα πάψει να εμφανίζεται στο site.")) return;
+    setBusy(true);
+    await supabase.from("therapist_profiles").update({
+      admin_visibility_override: false,
+      admin_override_at: null,
+      admin_override_note: null,
     }).eq("id", therapist.id);
     setBusy(false);
     await onRefresh();
@@ -587,23 +632,49 @@ function ProfileModal({ therapist, onClose, onRefresh }) {
 
           {/* Actions footer */}
           <div style={{ padding:"16px 28px", borderTop:"1px solid #F1F5F9", display:"flex", gap:10, flexWrap:"wrap", alignItems:"center", flexShrink:0 }}>
+            {/* Πραγματική κατάσταση ορατότητας — αυτό που βλέπει ο ασθενής */}
+            {visible ? (
+              <div style={{ background:"#F0FDF4", color:"#15803D", padding:"8px 14px", borderRadius:8, fontSize:12, fontWeight:600, display:"inline-flex", alignItems:"center", gap:6, border:"1px solid #BBF7D0" }}>
+                <Eye size={14}/>
+                Ορατός στο site
+                {therapist.admin_visibility_override && <span style={{ fontWeight:500, opacity:.8 }}>· χειροκίνητα</span>}
+              </div>
+            ) : (
+              <div style={{ background:"#FEF2F2", color:"#BE123C", padding:"8px 14px", borderRadius:8, fontSize:12, fontWeight:600, display:"inline-flex", alignItems:"center", gap:6, border:"1px solid #FECACA" }}>
+                <EyeOff size={14}/>
+                Κρυφός από το site
+              </div>
+            )}
+
             {!therapist.is_approved && stats.canApprove && (
               <Btn variant="success" onClick={approve} disabled={busy}>
                 <CheckCircle2 size={15}/> Έγκριση
               </Btn>
             )}
 
-            {!therapist.is_approved && !stats.canApprove && (
+            {/* Ενεργοποίηση ούτως ή άλλως — διαθέσιμη σε ΟΠΟΙΟΝΔΗΠΟΤΕ δεν
+                είναι ήδη ορατός, ανεξάρτητα από το τι λείπει. */}
+            {!visible && (
               <>
-                <div style={{ background:"#FFFBEB", color:"#92400E", padding:"8px 14px", borderRadius:8, fontSize:12, fontWeight:600, display:"inline-flex", alignItems:"center", gap:6 }}>
-                  <AlertTriangle size={14}/>
-                  Λείπουν {stats.requiredTotal - stats.requiredDone} υποχρεωτικά
-                </div>
+                {stats.requiredDone < stats.requiredTotal && (
+                  <div style={{ background:"#FFFBEB", color:"#92400E", padding:"8px 14px", borderRadius:8, fontSize:12, fontWeight:600, display:"inline-flex", alignItems:"center", gap:6 }}>
+                    <AlertTriangle size={14}/>
+                    Λείπουν {stats.requiredTotal - stats.requiredDone} υποχρεωτικά
+                  </div>
+                )}
                 <button onClick={forceActivate} disabled={busy}
-                  style={{ padding:"8px 16px", borderRadius:8, border:"1.5px solid #15803D", background:"#fff", color:"#15803D", fontSize:13, fontWeight:600, cursor:"pointer", fontFamily:"inherit", display:"inline-flex", alignItems:"center", gap:6 }}>
+                  style={{ padding:"8px 16px", borderRadius:8, border:"none", background:"#15803D", color:"#fff", fontSize:13, fontWeight:600, cursor:busy?"not-allowed":"pointer", fontFamily:"inherit", display:"inline-flex", alignItems:"center", gap:6 }}>
                   <CheckCircle2 size={15}/> Ενεργοποίηση ούτως ή άλλως
                 </button>
               </>
+            )}
+
+            {/* Αφαίρεση override — μόνο όταν είναι ενεργό */}
+            {therapist.admin_visibility_override && (
+              <button onClick={removeOverride} disabled={busy}
+                style={{ padding:"8px 16px", borderRadius:8, border:"1.5px solid #E2E8F0", background:"#fff", color:"#64748B", fontSize:13, fontWeight:600, cursor:busy?"not-allowed":"pointer", fontFamily:"inherit", display:"inline-flex", alignItems:"center", gap:6 }}>
+                <EyeOff size={15}/> Αφαίρεση χειροκίνητης
+              </button>
             )}
 
             {status !== "rejected" && (
@@ -658,9 +729,12 @@ export default function TherapistsPage({ hideHeader = false } = {}) {
 
   async function fetchTherapists() {
     setLoading(true);
-    const [{ data: profiles }, { data: reviews }] = await Promise.all([
+    // Οι παθήσεις είναι ΥΠΟΧΡΕΩΤΙΚΟ πεδίο (3+) στον υπολογισμό πληρότητας
+    // της βάσης — χωρίς αυτές το admin θα έδειχνε λάθος εικόνα.
+    const [{ data: profiles }, { data: reviews }, { data: condLinks }] = await Promise.all([
       supabase.from("therapist_profiles").select("*").order("created_at", { ascending: false }),
       supabase.from("reviews").select("therapist_id, rating").eq("is_published", true),
+      supabase.from("therapist_conditions").select("therapist_id, condition_id"),
     ]);
 
     const rmap = {};
@@ -670,8 +744,13 @@ export default function TherapistsPage({ hideHeader = false } = {}) {
       rmap[rv.therapist_id].count += 1;
     });
 
+    const cmap = {};
+    (condLinks || []).forEach(c => {
+      cmap[c.therapist_id] = (cmap[c.therapist_id] || 0) + 1;
+    });
+
     setReviewStats(rmap);
-    setTherapists(profiles || []);
+    setTherapists((profiles || []).map(p => ({ ...p, conditions_count: cmap[p.id] || 0 })));
     setLoading(false);
   }
 
@@ -884,6 +963,17 @@ export default function TherapistsPage({ hideHeader = false } = {}) {
                 <div style={{ display:"flex", alignItems:"center", gap:8, flexWrap:"wrap", marginBottom:4 }}>
                   <span style={{ fontWeight:700, fontSize:15, color:"#0F172A" }}>{t.name || "—"}</span>
                   <Badge label={st.label} bg={st.bg} color={st.color}/>
+                  {/* Πραγματική ορατότητα — όχι απλώς is_approved */}
+                  {isPubliclyVisible(t) ? (
+                    <span style={{ display:"inline-flex", alignItems:"center", gap:3, background:"#F0FDF4", color:"#15803D", border:"1px solid #BBF7D0", padding:"2px 8px", borderRadius:999, fontSize:10, fontWeight:700, textTransform:"uppercase" }}>
+                      <Eye size={10}/> Ορατός
+                      {t.admin_visibility_override && " ·"}
+                    </span>
+                  ) : (
+                    <span style={{ display:"inline-flex", alignItems:"center", gap:3, background:"#FEF2F2", color:"#BE123C", border:"1px solid #FECACA", padding:"2px 8px", borderRadius:999, fontSize:10, fontWeight:700, textTransform:"uppercase" }}>
+                      <EyeOff size={10}/> Κρυφός
+                    </span>
+                  )}
                   {t.license_verified && (
                     <span style={{ display:"inline-flex", alignItems:"center", gap:3, background:"#F0FDF4", color:"#15803D", border:"1px solid #BBF7D0", padding:"2px 8px", borderRadius:999, fontSize:10, fontWeight:700, textTransform:"uppercase" }}>
                       <ShieldCheck size={10}/> Ελεγμένος
