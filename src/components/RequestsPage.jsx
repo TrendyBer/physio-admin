@@ -8,6 +8,14 @@ import {
 } from "lucide-react";
 import { exportToCsv, csvDate } from "../lib/exportCsv";
 
+// Ποιος ακύρωσε — για εμφάνιση στον admin
+const CANCELLED_BY = {
+  therapist: "από τον θεραπευτή",
+  patient:   "από τον ασθενή",
+  admin:     "από την πλατφόρμα",
+  system:    "αυτόματα",
+};
+
 const STATUS_MAP = {
   pending:   { label:"Εκκρεμές",      bg:"#FEF3C7", color:"#92400E" },
   confirmed: { label:"Επιβεβαιωμένο", bg:"#DBEAFE", color:"#1D4ED8" },
@@ -224,6 +232,9 @@ function RequestModal({ request, therapists, adminUser, onClose, onRefresh }) {
   const [showAssign, setShowAssign] = useState(false);
   const [tags, setTags] = useState(request.support_tags || []);
   const [busy, setBusy] = useState(false);
+
+  // Οι ακυρωμένες συνεδρίες κρατούν τον λόγο — όχι το αίτημα
+  const cancelledBookings = (request.bookings || []).filter(b => isCancelled(b.status));
 
   const st = STATUS_MAP[request.status] || STATUS_MAP.pending;
   const typeMap = TYPE_MAP[request.type] || TYPE_MAP.booking;
@@ -464,13 +475,29 @@ function RequestModal({ request, therapists, adminUser, onClose, onRefresh }) {
                       {request.bookings.map((b, i) => {
                         const bSt = STATUS_MAP[b.status] || STATUS_MAP.pending;
                         const d = new Date(b.session_date + 'T12:00:00');
+                        const cancelled = isCancelled(b.status);
                         return (
-                          <div key={b.id} style={{ display:"flex", alignItems:"center", gap:10, padding:"8px 12px", background:"#F8FAFC", borderRadius:8, fontSize:12 }}>
-                            <span style={{ color:"#64748B", fontWeight:600 }}>{i+1}.</span>
-                            <span style={{ color:"#0F172A", fontWeight:500, flex:1 }}>
-                              {DAYS_EL[d.getDay()]} {d.toLocaleDateString('el-GR', { day:'2-digit', month:'2-digit' })} στις {b.session_time?.slice(0, 5)}
-                            </span>
-                            <Badge label={bSt.label} bg={bSt.bg} color={bSt.color}/>
+                          <div key={b.id} style={{
+                            display:"flex", flexDirection:"column", gap:5, padding:"9px 12px",
+                            background: cancelled ? "#FEF2F2" : "#F8FAFC",
+                            border: cancelled ? "1px solid #FECACA" : "none",
+                            borderRadius:8, fontSize:12,
+                          }}>
+                            <div style={{ display:"flex", alignItems:"center", gap:10 }}>
+                              <span style={{ color:"#64748B", fontWeight:600 }}>{i+1}.</span>
+                              <span style={{ color:"#0F172A", fontWeight:500, flex:1 }}>
+                                {DAYS_EL[d.getDay()]} {d.toLocaleDateString('el-GR', { day:'2-digit', month:'2-digit' })} στις {b.session_time?.slice(0, 5)}
+                              </span>
+                              <Badge label={bSt.label} bg={bSt.bg} color={bSt.color}/>
+                            </div>
+                            {cancelled && (
+                              <div style={{ fontSize:11.5, color:"#991B1B", paddingLeft:20 }}>
+                                {CANCELLED_BY[b.cancelled_by_role] || CANCELLED_BY.admin}
+                                {b.cancelled_reason && (
+                                  <span style={{ color:"#78350F", fontStyle:"italic" }}> · {b.cancelled_reason}</span>
+                                )}
+                              </div>
+                            )}
                           </div>
                         );
                       })}
@@ -501,15 +528,52 @@ function RequestModal({ request, therapists, adminUser, onClose, onRefresh }) {
                   </div>
                 </div>
 
-                {/* Cancellation info */}
-                {isCancelled(request.status) && (
-                  <div style={{ background:"#FEF2F2", border:"1px solid #FECACA", borderRadius:10, padding:"12px 16px" }}>
-                    <div style={{ fontSize:11, fontWeight:700, color:"#BE123C", textTransform:"uppercase", letterSpacing:"0.06em", marginBottom:4, display:"inline-flex", alignItems:"center", gap:5 }}>
+                {/* ΛΟΓΟΣ ΑΚΥΡΩΣΗΣ
+                    Ο λόγος γράφεται στο session_bookings.cancelled_reason
+                    από τη cancel_booking(). Το session_requests ΔΕΝ έχει
+                    στήλη cancelled_reason — γι' αυτό έδειχνε πάντα «—». */}
+                {(isCancelled(request.status) || cancelledBookings.length > 0) && (
+                  <div style={{ background:"#FEF2F2", border:"1px solid #FECACA", borderRadius:10, padding:"14px 16px" }}>
+                    <div style={{ fontSize:11, fontWeight:700, color:"#BE123C", textTransform:"uppercase", letterSpacing:"0.06em", marginBottom:10, display:"inline-flex", alignItems:"center", gap:5 }}>
                       <XCircle size={12}/> Λόγος Ακύρωσης
                     </div>
-                    <div style={{ fontSize:13, color:"#991B1B", fontWeight:600 }}>{request.cancelled_reason || "—"}</div>
-                    {request.admin_comment && (
-                      <div style={{ fontSize:12, color:"#B91C1C", marginTop:6, fontStyle:"italic" }}>{request.admin_comment}</div>
+
+                    {cancelledBookings.length > 0 ? (
+                      <div style={{ display:"flex", flexDirection:"column", gap:12 }}>
+                        {cancelledBookings.map(b => (
+                          <div key={b.id}>
+                            <div style={{ fontSize:12.5, fontWeight:700, color:"#991B1B", marginBottom:3 }}>
+                              {fmtDate(b.session_date)} στις {b.session_time?.slice(0,5)}
+                              <span style={{ fontWeight:500, marginLeft:8 }}>
+                                {CANCELLED_BY[b.cancelled_by_role] || CANCELLED_BY.admin}
+                              </span>
+                            </div>
+                            <div style={{
+                              fontSize:13,
+                              color: b.cancelled_reason ? "#78350F" : "#94A3B8",
+                              fontStyle: b.cancelled_reason ? "italic" : "normal",
+                            }}>
+                              {b.cancelled_reason || "Δεν δόθηκε αιτιολογία"}
+                            </div>
+                            {b.cancellation_hours_before != null && (
+                              <div style={{ fontSize:11, color: Number(b.cancellation_hours_before) < 24 ? "#BE123C" : "#94A3B8", marginTop:3, fontWeight: Number(b.cancellation_hours_before) < 24 ? 700 : 400 }}>
+                                {Math.round(b.cancellation_hours_before)}h πριν τη συνεδρία
+                                {Number(b.cancellation_hours_before) < 24 && " — strike"}
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div style={{ fontSize:13, color:"#991B1B", fontWeight:600 }}>
+                        {request.admin_comment || "Δεν δόθηκε αιτιολογία"}
+                      </div>
+                    )}
+
+                    {request.admin_comment && cancelledBookings.length > 0 && (
+                      <div style={{ fontSize:12, color:"#B91C1C", marginTop:10, paddingTop:10, borderTop:"1px solid #FECACA", fontStyle:"italic" }}>
+                        Σχόλιο admin: {request.admin_comment}
+                      </div>
                     )}
                   </div>
                 )}
