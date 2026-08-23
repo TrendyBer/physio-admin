@@ -540,10 +540,12 @@ function RequestModal({ request, therapists, adminUser, onClose, onRefresh }) {
 
                     {cancelledBookings.length > 0 ? (
                       <div style={{ display:"flex", flexDirection:"column", gap:12 }}>
-                        {cancelledBookings.map(b => (
+                        {cancelledBookings.map(b => {
+                          const cd = new Date(b.session_date + 'T12:00:00');
+                          return (
                           <div key={b.id}>
                             <div style={{ fontSize:12.5, fontWeight:700, color:"#991B1B", marginBottom:3 }}>
-                              {fmtDate(b.session_date)} στις {b.session_time?.slice(0,5)}
+                              {DAYS_EL[cd.getDay()]} {cd.toLocaleDateString('el-GR', { day:'2-digit', month:'2-digit' })} στις {b.session_time?.slice(0,5)}
                               <span style={{ fontWeight:500, marginLeft:8 }}>
                                 {CANCELLED_BY[b.cancelled_by_role] || CANCELLED_BY.admin}
                               </span>
@@ -562,7 +564,8 @@ function RequestModal({ request, therapists, adminUser, onClose, onRefresh }) {
                               </div>
                             )}
                           </div>
-                        ))}
+                          );
+                        })}
                       </div>
                     ) : (
                       <div style={{ fontSize:13, color:"#991B1B", fontWeight:600 }}>
