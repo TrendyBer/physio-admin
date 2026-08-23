@@ -4,11 +4,38 @@ import { supabase } from "../lib/supabase";
 import {
   AlertTriangle, UserX, UserCheck, CreditCard, Star, CalendarX,
   FileWarning, CheckCircle2, ArrowRight, RefreshCw, Banknote, ShieldAlert,
+  UserPlus, EyeOff,
 } from "lucide-react";
 
 // Καταστάσεις πληρωμής που θεωρούνται "εισπραγμένες"
 const COLLECTED = ["paid", "pending_payout", "paid_out"];
 const isCancelled = (s) => (s || "").startsWith("cancelled");
+
+// ─── ΤΑ 9 ΥΠΟΧΡΕΩΤΙΚΑ ΤΗΣ ΒΑΣΗΣ ─────────────────────────────────────────
+// ΠΡΕΠΕΙ να συμφωνούν με την calc_profile_completeness(). Αν αποκλίνουν,
+// το admin δείχνει «όλα εντάξει» ενώ ο θεραπευτής μένει κρυφός στο site.
+function missingRequired(t, condCount) {
+  const m = [];
+  if (!t.name || t.name.trim().length <= 2) m.push("Ονοματεπώνυμο");
+  if (!t.photo_url) m.push("Φωτογραφία");
+  if (!t.license_url) m.push("Άδεια ασκήσεως");
+  if (!t.license_verified) m.push("Έλεγχος άδειας");
+  if (!t.specialty || t.specialty.trim().length <= 3) m.push("Ειδικότητα");
+  if (!t.bio || t.bio.trim().length < 30) m.push("Βιογραφικό 30+");
+  if ((condCount || 0) < 3) m.push("Παθήσεις (3+)");
+  const hasArea = (t.area && t.area.trim().length > 2) ||
+    (Array.isArray(t.service_areas) && t.service_areas.length > 0);
+  if (!hasArea) m.push("Περιοχές");
+  if (!(Number(t.price_per_session) > 0)) m.push("Τιμή συνεδρίας");
+  return m;
+}
+
+// Πραγματική δημόσια ορατότητα — ίδια λογική με το v_public_therapists
+function isPubliclyVisible(t) {
+  return !!t.is_approved
+    && !t.is_paused
+    && (!!t.is_profile_complete || !!t.admin_visibility_override);
+}
 
 // ─── ΟΡΙΣΜΟΙ TASK GROUPS ────────────────────────────────────────────────
 const GROUPS = [
@@ -21,12 +48,20 @@ const GROUPS = [
     goTo: "requests",
   },
   {
+    id: "incomplete_signup",
+    label: "Ημιτελείς εγγραφές",
+    hint: "Έκαναν εγγραφή αλλά δεν ανέβασαν άδεια — κόλλησαν στην αρχή",
+    Icon: UserPlus,
+    color: "#7E22CE", bg: "#FAF5FF", border: "#E9D5FF",
+    goTo: "users",
+  },
+  {
     id: "pending_therapists",
     label: "Θεραπευτές σε αναμονή έγκρισης",
-    hint: "Έχουν υποβάλει αίτηση και περιμένουν έλεγχο",
+    hint: "Ανέβασαν άδεια και περιμένουν έλεγχο",
     Icon: UserCheck,
     color: "#1D4ED8", bg: "#EFF6FF", border: "#BFDBFE",
-    goTo: "therapists",
+    goTo: "users",
   },
   {
     id: "unverified_license",
@@ -34,7 +69,15 @@ const GROUPS = [
     hint: "Ανεβασμένες άδειες που περιμένουν επιβεβαίωση από admin",
     Icon: ShieldAlert,
     color: "#0891B2", bg: "#ECFEFF", border: "#A5F3FC",
-    goTo: "therapists",
+    goTo: "users",
+  },
+  {
+    id: "approved_but_hidden",
+    label: "Εγκεκριμένοι αλλά κρυφοί",
+    hint: "Τους ενέκρινες, αλλά δεν εμφανίζονται στο site λόγω ελλιπούς προφίλ",
+    Icon: EyeOff,
+    color: "#BE123C", bg: "#FFF1F2", border: "#FECDD3",
+    goTo: "users",
   },
   {
     id: "overdue",
@@ -79,10 +122,10 @@ const GROUPS = [
   {
     id: "incomplete_therapists",
     label: "Θεραπευτές με ελλιπές προφίλ",
-    hint: "Λείπουν υποχρεωτικά στοιχεία από το checklist",
+    hint: "Έχουν ξεκινήσει αλλά λείπουν υποχρεωτικά στοιχεία",
     Icon: FileWarning,
     color: "#475569", bg: "#F8FAFC", border: "#E2E8F0",
-    goTo: "therapists",
+    goTo: "users",
   },
 ];
 
@@ -115,8 +158,10 @@ export default function TasksPage({ onNavigate }) {
   const [loading, setLoading] = useState(true);
   const [data, setData] = useState({
     unassigned: [],
+    incomplete_signup: [],
     pending_therapists: [],
     unverified_license: [],
+    approved_but_hidden: [],
     overdue: [],
     unpaid: [],
     pending_payout: [],
@@ -138,6 +183,7 @@ export default function TasksPage({ onNavigate }) {
       { data: bookings },
       { data: reviews },
       { data: payments },
+      { data: condLinks },
     ] = await Promise.all([
       supabase.from("session_requests").select("*").order("created_at", { ascending: false }),
       supabase.from("therapist_profiles").select("*").order("created_at", { ascending: false }),
@@ -145,6 +191,9 @@ export default function TasksPage({ onNavigate }) {
       supabase.from("session_bookings").select("id, request_id, session_date, status"),
       supabase.from("reviews").select("id, therapist_id, rating, comment, created_at, is_published").order("created_at", { ascending: false }),
       supabase.from("payments").select("*").order("created_at", { ascending: false }),
+      // Οι παθήσεις είναι ΥΠΟΧΡΕΩΤΙΚΟ πεδίο (3+) — χωρίς αυτές
+      // το admin θα έδειχνε λάθος εικόνα πληρότητας.
+      supabase.from("therapist_conditions").select("therapist_id, condition_id"),
     ]);
 
     const patientMap = {};
@@ -152,6 +201,11 @@ export default function TasksPage({ onNavigate }) {
 
     const therapistMap = {};
     (therapists || []).forEach(t => { therapistMap[t.id] = t; });
+
+    const condCount = {};
+    (condLinks || []).forEach(c => {
+      condCount[c.therapist_id] = (condCount[c.therapist_id] || 0) + 1;
+    });
 
     const bookingsByRequest = {};
     (bookings || []).forEach(b => {
@@ -179,56 +233,73 @@ export default function TasksPage({ onNavigate }) {
       };
     });
 
+    // Όλοι οι θεραπευτές με το τι τους λείπει
+    const allT = (therapists || [])
+      .filter(t => t.application_status !== "rejected")
+      .map(t => ({
+        ...t,
+        conditions_count: condCount[t.id] || 0,
+        missingList: missingRequired(t, condCount[t.id] || 0),
+        age: daysAgo(t.created_at),
+      }));
+
     // 1. Αιτήματα χωρίς θεραπευτή
     const unassigned = enrichedReqs.filter(
       r => !r.therapist_id && !isCancelled(r.status) && r.status !== "completed"
     );
 
-    // 2. Θεραπευτές σε αναμονή έγκρισης
-    const pending_therapists = (therapists || []).filter(
-      t => !t.is_approved && t.application_status === "pending"
+    // 2. ΗΜΙΤΕΛΕΙΣ ΕΓΓΡΑΦΕΣ — δεν ανέβασαν καν άδεια.
+    // Αυτοί δεν εμφανίζονται πουθενά αλλού: το «σε αναμονή έγκρισης»
+    // απαιτεί application_status = 'pending', που γίνεται ΜΟΝΟ μετά
+    // το ανέβασμα άδειας. Χωρίς αυτή την κατηγορία, χάνονταν σιωπηλά.
+    const incomplete_signup = allT.filter(
+      t => !t.license_url && !t.is_approved
     );
 
-    // 3. Άδειες ανεβασμένες αλλά μη ελεγμένες
-    const unverified_license = (therapists || []).filter(
+    // 3. Ανέβασαν άδεια, περιμένουν έγκριση
+    const pending_therapists = allT.filter(
+      t => !t.is_approved && !!t.license_url
+    );
+
+    // 4. Άδειες ανεβασμένες αλλά μη ελεγμένες
+    const unverified_license = allT.filter(
       t => t.license_url && !t.license_verified
     );
 
-    // 4/5. Απλήρωτες προμήθειες — ΑΠΟ ΤΟΝ ΠΙΝΑΚΑ payments
+    // 5. Εγκεκριμένοι αλλά κρυφοί από το site
+    const approved_but_hidden = allT.filter(
+      t => t.is_approved && !isPubliclyVisible(t)
+    );
+
+    // 6/7. Απλήρωτες προμήθειες
     const openPays = pays.filter(
       p => !COLLECTED.includes(p.status) && p.status !== "refunded"
     );
     const overdue = openPays.filter(p => p.age >= 30);
     const unpaid = openPays.filter(p => p.age < 30);
 
-    // 6. Εκκρεμείς πληρωμές προς θεραπευτές
+    // 8. Εκκρεμείς πληρωμές προς θεραπευτές
     const pending_payout = pays.filter(p => p.status === "pending_payout");
 
-    // 7. Κακές αξιολογήσεις
+    // 9. Κακές αξιολογήσεις
     const bad_reviews = (reviews || [])
       .filter(rv => rv.rating < 3)
       .map(rv => ({ ...rv, therapist_name: therapistMap[rv.therapist_id]?.name || "Άγνωστος" }));
 
-    // 8. Επιβεβαιωμένα χωρίς συνεδρία
+    // 10. Επιβεβαιωμένα χωρίς συνεδρία
     const confirmed_no_sessions = enrichedReqs.filter(
       r => r.status === "confirmed" && r.bookings.length === 0
     );
 
-    // 9. Ελλιπή προφίλ — ίδια υποχρεωτικά με το checklist του TherapistsPage
-    const incomplete_therapists = (therapists || []).map(t => {
-      const missingList = [];
-      if (!t.name) missingList.push("Ονοματεπώνυμο");
-      if (!t.license_url) missingList.push("Άδεια ασκήσεως");
-      if (!t.license_verified) missingList.push("Έλεγχος άδειας");
-      if (!t.specialty) missingList.push("Ειδικότητα");
-      if (!t.area && (!t.service_areas || t.service_areas.length === 0)) missingList.push("Περιοχές");
-      if (!Number(t.price_per_session)) missingList.push("Τιμή συνεδρίας");
-      if (!t.email || !t.phone) missingList.push("Επικοινωνία");
-      return { ...t, missingList };
-    }).filter(t => t.missingList.length > 0 && t.application_status !== "rejected");
+    // 11. Ελλιπή προφίλ — ΞΕΚΙΝΗΣΑΝ (έχουν άδεια) αλλά λείπουν στοιχεία.
+    // Όσοι δεν έχουν καν άδεια είναι στις «Ημιτελείς εγγραφές».
+    const incomplete_therapists = allT.filter(
+      t => t.missingList.length > 0 && !!t.license_url
+    );
 
     setData({
-      unassigned, pending_therapists, unverified_license,
+      unassigned, incomplete_signup, pending_therapists,
+      unverified_license, approved_but_hidden,
       overdue, unpaid, pending_payout,
       bad_reviews, confirmed_no_sessions, incomplete_therapists,
     });
@@ -295,6 +366,54 @@ export default function TasksPage({ onNavigate }) {
       ));
     }
 
+    // ΗΜΙΤΕΛΕΙΣ ΕΓΓΡΑΦΕΣ — δείχνει πόσο καιρό κόλλησαν
+    if (groupId === "incomplete_signup") {
+      return items.map(t => (
+        <div key={t.id} style={rowStyle}>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginBottom: 4 }}>
+              <span style={{ fontWeight: 700, fontSize: 14, color: "#0F172A" }}>{t.name || "—"}</span>
+              {t.age >= 3 && (
+                <span style={{ fontSize: 11, fontWeight: 700, color: "#BE123C", background: "#FFF1F2", padding: "2px 8px", borderRadius: 999, border: "1px solid #FECDD3" }}>
+                  {t.age} μέρες
+                </span>
+              )}
+            </div>
+            <div style={{ fontSize: 12, color: "#64748B", marginBottom: 4 }}>
+              {t.specialty || "Χωρίς ειδικότητα"}{t.area ? ` · ${t.area}` : ""}
+            </div>
+            <div style={{ fontSize: 11, color: "#94A3B8" }}>
+              Εγγραφή: {fmtDate(t.created_at)} · Συμπλήρωσε {9 - t.missingList.length}/9
+            </div>
+          </div>
+          <span style={{ fontSize: 11, fontWeight: 700, color: "#7E22CE", background: "#FAF5FF", border: "1px solid #E9D5FF", padding: "3px 10px", borderRadius: 999, flexShrink: 0, whiteSpace: "nowrap" }}>
+            Χωρίς άδεια
+          </span>
+        </div>
+      ));
+    }
+
+    // Εγκεκριμένοι αλλά κρυφοί
+    if (groupId === "approved_but_hidden") {
+      return items.map(t => (
+        <div key={t.id} style={rowStyle}>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontWeight: 700, fontSize: 14, color: "#0F172A", marginBottom: 5 }}>{t.name || "—"}</div>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 5 }}>
+              {t.missingList.map(m => (
+                <span key={m} style={{ fontSize: 11, color: "#BE123C", background: "#FFF1F2", border: "1px solid #FECDD3", padding: "2px 8px", borderRadius: 999, fontWeight: 600 }}>
+                  {m}
+                </span>
+              ))}
+            </div>
+          </div>
+          <span style={{ fontSize: 11, fontWeight: 700, color: "#BE123C", background: "#FFF1F2", border: "1px solid #FECDD3", padding: "3px 10px", borderRadius: 999, flexShrink: 0, whiteSpace: "nowrap" }}>
+            Κρυφός
+          </span>
+        </div>
+      ));
+    }
+
     // Θεραπευτές σε αναμονή
     if (groupId === "pending_therapists") {
       return items.map(t => (
@@ -308,12 +427,12 @@ export default function TasksPage({ onNavigate }) {
           </div>
           <span style={{
             fontSize: 11, fontWeight: 700, flexShrink: 0,
-            color: t.license_url ? "#15803D" : "#B45309",
-            background: t.license_url ? "#F0FDF4" : "#FFFBEB",
-            border: `1px solid ${t.license_url ? "#BBF7D0" : "#FDE68A"}`,
-            padding: "3px 10px", borderRadius: 999,
+            color: t.license_verified ? "#15803D" : "#B45309",
+            background: t.license_verified ? "#F0FDF4" : "#FFFBEB",
+            border: `1px solid ${t.license_verified ? "#BBF7D0" : "#FDE68A"}`,
+            padding: "3px 10px", borderRadius: 999, whiteSpace: "nowrap",
           }}>
-            {t.license_url ? "Άδεια ανεβασμένη" : "Χωρίς άδεια"}
+            {t.license_verified ? "Άδεια ελεγμένη" : "Θέλει έλεγχο"}
           </span>
         </div>
       ));
@@ -329,7 +448,7 @@ export default function TasksPage({ onNavigate }) {
               {t.specialty || "—"}{t.area ? ` · ${t.area}` : ""}
             </div>
           </div>
-          <span style={{ fontSize: 11, fontWeight: 700, color: "#0891B2", background: "#ECFEFF", border: "1px solid #A5F3FC", padding: "3px 10px", borderRadius: 999, flexShrink: 0 }}>
+          <span style={{ fontSize: 11, fontWeight: 700, color: "#0891B2", background: "#ECFEFF", border: "1px solid #A5F3FC", padding: "3px 10px", borderRadius: 999, flexShrink: 0, whiteSpace: "nowrap" }}>
             Θέλει έλεγχο
           </span>
         </div>
@@ -341,7 +460,7 @@ export default function TasksPage({ onNavigate }) {
       return items.map(rv => (
         <div key={rv.id} style={rowStyle}>
           <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 3 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 3, flexWrap: "wrap" }}>
               <span style={{ fontWeight: 700, fontSize: 14, color: "#0F172A" }}>{rv.therapist_name}</span>
               <span style={{ fontSize: 12, fontWeight: 700, color: "#BE123C" }}>{rv.rating}/5</span>
               {!rv.is_published && <Badge label="Μη δημοσιευμένη" bg="#F1F5F9" color="#475569" />}
@@ -360,9 +479,12 @@ export default function TasksPage({ onNavigate }) {
       return items.map(t => (
         <div key={t.id} style={rowStyle}>
           <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 5 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 5, flexWrap: "wrap" }}>
               <span style={{ fontWeight: 700, fontSize: 14, color: "#0F172A" }}>{t.name || "—"}</span>
               {t.is_approved && <Badge label="Εγκεκριμένος" bg="#D1FAE5" color="#065F46" />}
+              <span style={{ fontSize: 11, color: "#64748B", fontWeight: 600 }}>
+                {9 - t.missingList.length}/9
+              </span>
             </div>
             <div style={{ display: "flex", flexWrap: "wrap", gap: 5 }}>
               {t.missingList.map(m => (
@@ -413,7 +535,7 @@ export default function TasksPage({ onNavigate }) {
       ) : (
         <>
           {/* Σύνοψη */}
-          <div style={{ background: "#FFFBEB", border: "1px solid #FDE68A", borderRadius: 12, padding: "14px 18px", marginBottom: 20, display: "flex", alignItems: "center", gap: 12 }}>
+          <div style={{ background: "#FFFBEB", border: "1px solid #FDE68A", borderRadius: 12, padding: "14px 18px", marginBottom: 20, display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
             <AlertTriangle size={20} color="#B45309" strokeWidth={2.2} />
             <div style={{ fontSize: 14, color: "#92400E" }}>
               <strong>{totalTasks}</strong> {totalTasks === 1 ? "εκκρεμότητα" : "εκκρεμότητες"} συνολικά
