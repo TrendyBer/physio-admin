@@ -3,7 +3,7 @@ import { useState, useEffect } from "react";
 import { supabase } from "../lib/supabase";
 import {
   Info, Save, Check, AlertTriangle, Repeat, Bell, User, SlidersHorizontal,
-  Eye, EyeOff, Ban, Clock, TrendingUp,
+  Eye, EyeOff, Ban, Clock, TrendingUp, Mail,
 } from "lucide-react";
 
 const num = (v) => (v === null || v === undefined || v === "" ? 0 : Number(v));
@@ -147,8 +147,47 @@ export default function SettingsPage() {
   const [saved, setSaved] = useState(false);
   const [loading, setLoading] = useState(true);
   const [password, setPassword] = useState({ current: "", new: "", confirm: "" });
+  const [currentEmail, setCurrentEmail] = useState("");
+  const [newEmail, setNewEmail] = useState("");
+  const [emailSaving, setEmailSaving] = useState(false);
+  const [emailSaved, setEmailSaved] = useState(false);
+  const [pwSaving, setPwSaving] = useState(false);
+  const [pwSaved, setPwSaved] = useState(false);
 
-  useEffect(() => { fetchSettings(); }, []);
+  useEffect(() => { fetchSettings(); fetchAuthEmail(); }, []);
+
+  async function fetchAuthEmail() {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (user?.email) setCurrentEmail(user.email);
+  }
+
+  async function changeEmail() {
+    if (!newEmail || newEmail === currentEmail) return;
+    setEmailSaving(true);
+    const { error } = await supabase.auth.updateUser({ email: newEmail });
+    if (error) {
+      alert("Σφάλμα: " + error.message);
+    } else {
+      setEmailSaved(true);
+      setNewEmail("");
+      setTimeout(() => setEmailSaved(false), 4000);
+    }
+    setEmailSaving(false);
+  }
+
+  async function changePassword() {
+    if (password.new !== password.confirm || !password.new) return;
+    setPwSaving(true);
+    const { error } = await supabase.auth.updateUser({ password: password.new });
+    if (error) {
+      alert("Σφάλμα: " + error.message);
+    } else {
+      setPwSaved(true);
+      setPassword({ current: "", new: "", confirm: "" });
+      setTimeout(() => setPwSaved(false), 2000);
+    }
+    setPwSaving(false);
+  }
 
   async function fetchSettings() {
     setLoading(true);
@@ -402,40 +441,64 @@ export default function SettingsPage() {
 
       {/* ══ ΛΟΓΑΡΙΑΣΜΟΣ ══════════════════════════════════════════════════ */}
       {activeTab === "account" && (
-        <Section title="Λογαριασμός Admin">
-          <div style={{ maxWidth: 400 }}>
-            <Field label="Τρέχον Password">
-              <Input type="password" value={password.current} onChange={(e) => setPassword((p) => ({ ...p, current: e.target.value }))} placeholder="••••••••" />
-            </Field>
-            <Field label="Νέο Password">
-              <Input type="password" value={password.new} onChange={(e) => setPassword((p) => ({ ...p, new: e.target.value }))} placeholder="••••••••" />
-            </Field>
-            <Field label="Επιβεβαίωση Νέου Password">
-              <Input type="password" value={password.confirm} onChange={(e) => setPassword((p) => ({ ...p, confirm: e.target.value }))} placeholder="••••••••" />
-            </Field>
-            {password.new && password.confirm && password.new !== password.confirm && (
-              <div style={{ fontSize: 12, color: "#BE123C", marginBottom: 12, display: "flex", alignItems: "center", gap: 6 }}>
-                <AlertTriangle size={13} strokeWidth={2.2} />
-                Τα passwords δεν ταιριάζουν
-              </div>
-            )}
-            <SaveButton
-              onClick={async () => {
-                if (password.new !== password.confirm || !password.new) return;
-                setSaving(true);
-                const { error } = await supabase.auth.updateUser({ password: password.new });
-                if (error) alert("Σφάλμα: " + error.message);
-                else {
-                  setSaved(true);
-                  setPassword({ current: "", new: "", confirm: "" });
-                  setTimeout(() => setSaved(false), 2000);
-                }
-                setSaving(false);
-              }}
-              saving={saving} saved={saved}
-            />
-          </div>
-        </Section>
+        <div>
+          {/* Email / Username εισόδου */}
+          <Section title="Email Εισόδου (Username)" subtitle="Το email με το οποίο συνδέεσαι στο admin">
+            <Note tone="info" Icon={Mail}>
+              Το τρέχον email εισόδου είναι <strong>{currentEmail || "—"}</strong>.
+            </Note>
+
+            <Note tone="warn" Icon={AlertTriangle}>
+              Για ασφάλεια, το Supabase στέλνει <strong>link επιβεβαίωσης</strong> στο νέο email
+              (και ενδεχομένως και στο παλιό). Η αλλαγή ολοκληρώνεται <strong>μόνο αφού πατήσεις
+              το link</strong>. Μέχρι τότε, συνδέεσαι με το παλιό email.
+            </Note>
+
+            <div style={{ maxWidth: 400 }}>
+              <Field label="Νέο Email Εισόδου">
+                <Input type="email" value={newEmail} onChange={(e) => setNewEmail(e.target.value)} placeholder="new@email.gr" />
+              </Field>
+              {newEmail && newEmail === currentEmail && (
+                <div style={{ fontSize: 12, color: "#B45309", marginBottom: 12, display: "flex", alignItems: "center", gap: 6 }}>
+                  <AlertTriangle size={13} strokeWidth={2.2} />
+                  Το νέο email είναι ίδιο με το τρέχον
+                </div>
+              )}
+              {emailSaved && (
+                <div style={{ fontSize: 12, color: "#15803D", marginBottom: 12, display: "flex", alignItems: "center", gap: 6, fontWeight: 600 }}>
+                  <Check size={13} strokeWidth={2.6} />
+                  Στάλθηκε link επιβεβαίωσης — έλεγξε το email σου
+                </div>
+              )}
+              <SaveButton onClick={changeEmail} saving={emailSaving} saved={emailSaved} />
+            </div>
+          </Section>
+
+          {/* Password */}
+          <Section title="Αλλαγή Password" subtitle="Ο κωδικός εισόδου στο admin">
+            <div style={{ maxWidth: 400 }}>
+              <Field label="Νέο Password" hint="Τουλάχιστον 6 χαρακτήρες.">
+                <Input type="password" value={password.new} onChange={(e) => setPassword((p) => ({ ...p, new: e.target.value }))} placeholder="••••••••" />
+              </Field>
+              <Field label="Επιβεβαίωση Νέου Password">
+                <Input type="password" value={password.confirm} onChange={(e) => setPassword((p) => ({ ...p, confirm: e.target.value }))} placeholder="••••••••" />
+              </Field>
+              {password.new && password.confirm && password.new !== password.confirm && (
+                <div style={{ fontSize: 12, color: "#BE123C", marginBottom: 12, display: "flex", alignItems: "center", gap: 6 }}>
+                  <AlertTriangle size={13} strokeWidth={2.2} />
+                  Τα passwords δεν ταιριάζουν
+                </div>
+              )}
+              {password.new && password.new.length > 0 && password.new.length < 6 && (
+                <div style={{ fontSize: 12, color: "#B45309", marginBottom: 12, display: "flex", alignItems: "center", gap: 6 }}>
+                  <AlertTriangle size={13} strokeWidth={2.2} />
+                  Πολύ σύντομος κωδικός (τουλάχιστον 6 χαρακτήρες)
+                </div>
+              )}
+              <SaveButton onClick={changePassword} saving={pwSaving} saved={pwSaved} />
+            </div>
+          </Section>
+        </div>
       )}
     </div>
   );
