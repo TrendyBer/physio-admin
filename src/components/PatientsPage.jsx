@@ -1,6 +1,54 @@
 "use client";
 import { useState, useEffect } from "react";
 import { supabase } from "../lib/supabase";
+
+// ─── Δυναμική εμφάνιση ΟΛΩΝ των καταχωρημένων στοιχείων του χρήστη ───
+const FIELD_LABELS = {
+  name: "Όνομα", full_name: "Ονοματεπώνυμο", email: "Email",
+  phone: "Τηλέφωνο", phone2: "Τηλέφωνο 2", mobile: "Κινητό", telephone: "Τηλέφωνο",
+  address: "Διεύθυνση", area: "Περιοχή", region: "Περιοχή", city: "Πόλη",
+  postal_code: "Τ.Κ.", zip: "Τ.Κ.", zip_code: "Τ.Κ.",
+  iban: "IBAN", bank: "Τράπεζα", bank_name: "Τράπεζα", bank_account: "Αρ. Λογαριασμού",
+  payout_name: "Δικαιούχος", account_holder: "Δικαιούχος", beneficiary: "Δικαιούχος",
+  afm: "ΑΦΜ", vat: "ΑΦΜ", tax_id: "ΑΦΜ", amka: "ΑΜΚΑ", doy: "ΔΟΥ",
+  date_of_birth: "Ημ. Γέννησης", birth_date: "Ημ. Γέννησης", gender: "Φύλο",
+  emergency_contact: "Επαφή έκτακτης ανάγκης", emergency_phone: "Τηλ. έκτακτης ανάγκης",
+  notes: "Σημειώσεις χρήστη",
+};
+const CONTACT_ORDER = [
+  "email", "phone", "mobile", "telephone", "phone2",
+  "emergency_contact", "emergency_phone",
+  "address", "area", "region", "city", "postal_code", "zip", "zip_code",
+  "iban", "bank", "bank_name", "bank_account", "payout_name", "account_holder", "beneficiary",
+  "afm", "vat", "tax_id", "amka", "doy",
+  "date_of_birth", "birth_date", "gender", "notes",
+];
+const CONTACT_EXCLUDE = new Set([
+  "id", "user_id", "auth_id", "created_at", "updated_at",
+  "support_tags", "admin_comment", "name", "full_name",
+  "requests", "reviews", "totalRequests", "completed", "active", "cancelled", "unpaid", "lastActivity",
+  "photo_url", "avatar_url", "is_approved", "application_status", "reject_reason_code",
+  "license_verified", "verified_at", "verified_by", "license_url", "cv_url", "certifications_urls",
+  "service_areas", "is_profile_complete", "is_profile_full", "is_paused", "paused_reason",
+  "quality_score", "completeness_score", "subscription_exempt", "fee_exempt", "exempt_reason",
+  "terms_accepted_at", "rank_weight", "availability_slots",
+  "specialty", "price_per_session", "years_experience", "bio",
+  "education_school", "education_year", "education_degree", "response_time_hours",
+]);
+function cmPretty(k) { return FIELD_LABELS[k] || k.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()); }
+function cmShowable(v) { return v !== null && v !== undefined && v !== "" && typeof v !== "object" && typeof v !== "boolean"; }
+function buildContactRows(rec, fmtDate) {
+  if (!rec) return [];
+  const knownSet = new Set(CONTACT_ORDER);
+  const known = CONTACT_ORDER.filter((k) => cmShowable(rec[k])).map((k) => [cmPretty(k), String(rec[k])]);
+  const extra = Object.keys(rec)
+    .filter((k) => !CONTACT_EXCLUDE.has(k) && !knownSet.has(k) && cmShowable(rec[k]))
+    .map((k) => [cmPretty(k), String(rec[k])]);
+  const rows = [...known, ...extra];
+  if (rec.created_at && fmtDate) rows.push(["Εγγραφή", fmtDate(rec.created_at)]);
+  return rows;
+}
+
 import {
   Search, Download, User, Phone, MapPin, Calendar, X, Plus, Trash2,
   ClipboardList, Star, Wallet, XCircle, CheckCircle2, AlertTriangle,
@@ -518,19 +566,15 @@ export default function PatientsPage() {
                     <div style={{ fontSize: 13, fontWeight: 700, color: "#0F172A", marginBottom: 14, display: "flex", alignItems: "center", gap: 6 }}>
                       <Home size={14} color="#1D4ED8" /> Στοιχεία επικοινωνίας
                     </div>
-                    {[
-                      ["Τηλέφωνο", selected.phone],
-                      ["Διεύθυνση", selected.address],
-                      ["Περιοχή", selected.area],
-                      ["Πόλη", selected.city],
-                      ["Τ.Κ.", selected.postal_code],
-                      ["Εγγραφή", fmtDate(selected.created_at)],
-                    ].map(([k, v]) => (
+                    {buildContactRows(selected, fmtDate).map(([k, v]) => (
                       <div key={k} style={{ display: "flex", padding: "8px 0", borderTop: "1px solid #F1F5F9", fontSize: 13 }}>
-                        <span style={{ width: 130, color: "#94A3B8", flexShrink: 0 }}>{k}</span>
-                        <span style={{ color: v ? "#0F172A" : "#CBD5E1", fontWeight: v ? 600 : 400 }}>{v || "—"}</span>
+                        <span style={{ width: 150, color: "#94A3B8", flexShrink: 0 }}>{k}</span>
+                        <span style={{ color: v ? "#0F172A" : "#CBD5E1", fontWeight: v ? 600 : 400, wordBreak: "break-word" }}>{v || "—"}</span>
                       </div>
                     ))}
+                    {buildContactRows(selected, fmtDate).length === 0 && (
+                      <div style={{ fontSize: 13, color: "#94A3B8", padding: "8px 0" }}>Δεν έχουν καταχωρηθεί στοιχεία.</div>
+                    )}
                   </div>
 
                   {/* Tags */}
