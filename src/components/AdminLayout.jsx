@@ -2,16 +2,13 @@
 import { useState, useEffect } from "react";
 import { supabase } from "../lib/supabase";
 import {
-  LayoutDashboard, ListChecks, ClipboardList, CreditCard, Users, Stethoscope,
-  Star, FileText, Heart, Package, FolderTree, Settings, LogOut, Lock, User,
-  Repeat,
+  LayoutDashboard, ListChecks, ClipboardList, CreditCard, Users,
+  Star, FileText, Heart, Package, FolderTree, Settings, LogOut, Lock,
 } from "lucide-react";
 
 import AdminDashboard from "./AdminDashboard";
 import TasksPage from "./TasksPage";
 import UsersPage from "./UsersPage";
-import PatientsPage from "./PatientsPage";
-import TherapistsPage from "./TherapistsPage";
 import RequestsPage from "./RequestsPage";
 import PaymentsPage from "./PaymentsPage";
 import ReviewsPage from "./ReviewsPage";
@@ -20,31 +17,28 @@ import SettingsPage from "./SettingsPage";
 import BlogPage from "./BlogPage";
 import CMSPage from "./CMSPage";
 import PackagesPage from "./PackagesPage";
-import SubscriptionsPage from "./SubscriptionsPage";
 
 // ─── NAV STRUCTURE ──────────────────────────────────────────────────────
+// Grouped into logical sections for cleaner navigation
 const NAV_SECTIONS = [
   {
-    section: null,
+    section: null, // No header for main items
     items: [
-      { id: "dashboard", label: "Dashboard",            Icon: LayoutDashboard },
+      { id: "dashboard", label: "Dashboard",           Icon: LayoutDashboard },
       { id: "tasks",     label: "Χρειάζονται Ενέργεια", Icon: ListChecks },
     ],
   },
   {
     section: "Λειτουργία",
     items: [
-      { id: "requests",      label: "Αιτήματα",   Icon: ClipboardList },
-      { id: "payments",      label: "Πληρωμές",   Icon: CreditCard },
-      { id: "subscriptions", label: "Συνδρομές",  Icon: Repeat },
+      { id: "requests",  label: "Αιτήματα",  Icon: ClipboardList },
+      { id: "payments",  label: "Πληρωμές",  Icon: CreditCard },
     ],
   },
   {
     section: "Χρήστες",
     items: [
-      { id: "therapists", label: "Θεραπευτές", Icon: Stethoscope },
-      { id: "patients",   label: "Ασθενείς",   Icon: User },
-      { id: "users",      label: "Λογαριασμοί", Icon: Users },
+      { id: "users", label: "Θεραπευτές & Ασθενείς", Icon: Users },
     ],
   },
   {
@@ -58,9 +52,9 @@ const NAV_SECTIONS = [
   {
     section: "Διαμόρφωση",
     items: [
-      { id: "packages",   label: "Πακέτα",     Icon: Package },
-      { id: "categories", label: "Κατηγορίες", Icon: FolderTree },
-      { id: "settings",   label: "Ρυθμίσεις",  Icon: Settings },
+      { id: "packages",   label: "Πακέτα",      Icon: Package },
+      { id: "categories", label: "Κατηγορίες",  Icon: FolderTree },
+      { id: "settings",   label: "Ρυθμίσεις",   Icon: Settings },
     ],
   },
 ];
@@ -88,6 +82,7 @@ function Sidebar({ activePage, onNavigate, adminEmail, onLogout, taskCount }) {
       <nav style={{ padding: "12px 12px", flex: 1, overflowY: "auto" }}>
         {NAV_SECTIONS.map((section, sectionIdx) => (
           <div key={sectionIdx} style={{ marginBottom: 14 }}>
+            {/* Section header */}
             {section.section && (
               <div style={{
                 fontSize: 10,
@@ -101,6 +96,7 @@ function Sidebar({ activePage, onNavigate, adminEmail, onLogout, taskCount }) {
               </div>
             )}
 
+            {/* Section items */}
             {section.items.map(item => {
               const isActive = activePage === item.id;
               const ItemIcon = item.Icon;
@@ -229,8 +225,6 @@ export default function AdminLayout() {
   }
 
   // Μετράει τις εκκρεμότητες για το badge στο sidebar
-  // ΠΡΟΣΟΧΗ: οι απλήρωτες προμήθειες διαβάζονται από τον πίνακα `payments`,
-  // ΟΧΙ από το session_requests.is_paid (που δεν χρησιμοποιείται).
   async function fetchTaskCount() {
     try {
       const [
@@ -238,35 +232,35 @@ export default function AdminLayout() {
         { data: therapists },
         { data: reviews },
         { data: bookings },
-        { data: payments },
+        { data: paymentsData },
       ] = await Promise.all([
         supabase.from("session_requests").select("id, status, therapist_id, type"),
         supabase.from("therapist_profiles").select("id, is_approved, application_status"),
-        supabase.from("reviews").select("id, rating"),
+        supabase.from("reviews").select("id, rating, is_published"),
         supabase.from("session_bookings").select("request_id"),
-        supabase.from("payments").select("id, paid, status"),
+        supabase.from("payments").select("id, paid"),
       ]);
 
       const bookedIds = new Set((bookings || []).map(b => b.request_id));
-      const isCancelled = s => (s || "").startsWith("cancelled");
 
       const unassigned = (reqs || []).filter(
-        r => !r.therapist_id && !isCancelled(r.status) && r.status !== "completed"
+        r => !r.therapist_id && r.status !== "cancelled" && r.status !== "completed"
       ).length;
 
       const pendingTherapists = (therapists || []).filter(
         t => !t.is_approved && t.application_status === "pending"
       ).length;
 
-      const unpaid = (payments || []).filter(p => !p.paid).length;
+      const unpaid = (paymentsData || []).filter(p => !p.paid).length;
 
       const badReviews = (reviews || []).filter(rv => rv.rating < 3).length;
+      const pendingReviews = (reviews || []).filter(rv => !rv.is_published).length;
 
       const confirmedNoSessions = (reqs || []).filter(
         r => r.status === "confirmed" && !bookedIds.has(r.id)
       ).length;
 
-      setTaskCount(unassigned + pendingTherapists + unpaid + badReviews + confirmedNoSessions);
+      setTaskCount(unassigned + pendingTherapists + unpaid + badReviews + confirmedNoSessions + pendingReviews);
     } catch (_) {
       setTaskCount(0);
     }
@@ -283,12 +277,10 @@ export default function AdminLayout() {
       case "dashboard":  return <AdminDashboard onNavigate={setActivePage} />;
       case "tasks":      return <TasksPage onNavigate={setActivePage} />;
       case "users":      return <UsersPage />;
-      case "patients":   return <PatientsPage />;
-      case "therapists": return <TherapistsPage />;
+      case "therapists": return <UsersPage />;
       case "requests":   return <RequestsPage />;
       case "packages":   return <PackagesPage />;
       case "payments":   return <PaymentsPage />;
-      case "subscriptions": return <SubscriptionsPage />;
       case "reviews":    return <ReviewsPage />;
       case "categories": return <CategoriesPage />;
       case "settings":   return <SettingsPage />;
