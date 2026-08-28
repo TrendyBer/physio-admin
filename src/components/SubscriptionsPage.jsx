@@ -4,7 +4,7 @@ import { supabase } from "../lib/supabase";
 import {
   CreditCard, Users, FileText, Plus, Pencil, Check, X, Star, Ban,
   AlertTriangle, RefreshCw, Search, ShieldOff, Wallet,
-  TrendingUp, CheckCircle2, Save, Trash2,
+  TrendingUp, CheckCircle2, Save, Trash2, Tag, Lock, Archive,
 } from "lucide-react";
 
 // ─── HELPERS ────────────────────────────────────────────────────────────
@@ -279,8 +279,19 @@ export default function SubscriptionsPage() {
       sub,
       plan,
       status,
-      price: sub ? num(sub.price_locked ?? plan?.price_monthly) : 0,
-      fee: t.fee_exempt ? 0 : num(sub?.first_session_fee_locked ?? plan?.first_session_fee ?? defaultFee),
+      // ΠΡΑΓΜΑΤΙΚΗ τιμή: το effective_* είναι ό,τι πληρώνει σήμερα, μετά
+      // την προσφορά. Το *_locked είναι η τιμή καταλόγου που θα ισχύσει
+      // όταν λήξει ο κωδικός. Αν μετρούσαμε το locked, οι προσφορές θα
+      // ήταν αόρατες στα έσοδα και τα νούμερα θα έλεγαν ψέματα.
+      price: sub ? num(sub.effective_price ?? sub.price_locked ?? plan?.price_monthly) : 0,
+      listPrice: sub ? num(sub.price_locked ?? plan?.price_monthly) : 0,
+      fee: t.fee_exempt ? 0 : num(sub?.effective_first_session_fee ?? sub?.first_session_fee_locked ?? plan?.first_session_fee ?? defaultFee),
+      listFee: num(sub?.first_session_fee_locked ?? plan?.first_session_fee ?? defaultFee),
+      promoCode: sub?.promo_code_text || null,
+      promoEndsAt: sub?.promo_ends_at || null,
+      promoLive: !!sub?.promo_code_text && (!sub?.promo_ends_at || new Date(sub.promo_ends_at) > new Date()),
+      planName: sub?.plan_snapshot?.name_el || plan?.name_el || null,
+      planVersion: sub?.plan_version || null,
       openInvoices: open.length,
       amountDue: open.reduce((a, b) => a + num(b.amount), 0),
     };
@@ -325,6 +336,9 @@ export default function SubscriptionsPage() {
       badge_label: form.badge_label?.trim() || null,
       display_order: parseInt(form.display_order, 10) || 0,
       is_active: !!form.is_active,
+      features_en: (form.features_text_en || "").split("\n").map((x) => x.trim()).filter(Boolean),
+      is_recommended: !!form.is_recommended,
+      is_archived: !!form.is_archived,
     };
 
     const { error } = form.id
@@ -360,13 +374,37 @@ export default function SubscriptionsPage() {
       .eq("therapist_id", therapistId)
       .in("status", ["trialing", "active", "past_due", "exempt"]);
 
+    const lockedPrice = num(billing === "yearly" ? plan?.price_yearly : plan?.price_monthly);
+    const lockedFee = num(plan?.first_session_fee);
+
+    // ΦΩΤΟΓΡΑΦΙΑ ΟΡΩΝ.
+    // Παλιά η χειροκίνητη ανάθεση έγραφε μόνο price_locked και
+    // first_session_fee_locked — χωρίς snapshot. Δηλαδή ο θεραπευτής που
+    // τον έβαζες εσύ έπαιρνε συνδρομή χωρίς παγωμένους όρους, ενώ αυτός
+    // που περνούσε από το onboarding έπαιρνε. Η πρώτη αλλαγή τιμής θα
+    // άλλαζε αναδρομικά τους όρους του πρώτου.
+    // Εδώ γράφουμε ΤΑ ΙΔΙΑ πεδία με την activate_subscription.
     const { error } = await supabase.from("therapist_subscriptions").insert([{
       therapist_id: therapistId,
       plan_id: planId,
       status: "active",
       billing_interval: billing,
-      price_locked: num(billing === "yearly" ? plan?.price_yearly : plan?.price_monthly),
-      first_session_fee_locked: num(plan?.first_session_fee),
+      price_locked: lockedPrice,
+      first_session_fee_locked: lockedFee,
+      effective_price: lockedPrice,
+      effective_first_session_fee: lockedFee,
+      plan_snapshot: plan || null,
+      plan_version: plan?.version || 1,
+      agreement_version: "admin",
+      agreement_accepted_at: now.toISOString(),
+      agreement_snapshot: {
+        assigned_by_admin: true,
+        plan_name_el: plan?.name_el || null,
+        billing_interval: billing,
+        list_price: lockedPrice,
+        list_fee: lockedFee,
+        assigned_at: now.toISOString(),
+      },
       started_at: now.toISOString(),
       current_period_start: now.toISOString(),
       current_period_end: end.toISOString(),
@@ -590,6 +628,7 @@ export default function SubscriptionsPage() {
                       <Btn small variant="ghost" Icon={Pencil} onClick={() => setPlanModal({
                         ...p,
                         features_text: Array.isArray(p.features_el) ? p.features_el.join("\n") : "",
+                        features_text_en: Array.isArray(p.features_en) ? p.features_en.join("\n") : "",
                       })}>
                         Επεξεργασία
                       </Btn>
@@ -643,14 +682,39 @@ export default function SubscriptionsPage() {
                           <div style={{ fontSize: 12, color: "#94A3B8" }}>{r.specialty || r.area || "—"}</div>
                         </td>
                         <td style={{ padding: "12px 14px", fontSize: 13, color: "#334155" }}>
-                          {r.plan?.name_el || <span style={{ color: "#CBD5E1" }}>—</span>}
+                          {/* Το όνομα από το snapshot, όχι από το τρέχον πακέτο:
+                              αν το πακέτο μετονομαστεί, ο θεραπευτής πρέπει να
+                              συνεχίσει να δείχνει αυτό που αποδέχτηκε. */}
+                          {r.planName || <span style={{ color: "#CBD5E1" }}>—</span>}
+                          {r.planVersion && (
+                            <span style={{ fontSize: 11, color: "#94A3B8", marginLeft: 6 }}>v{r.planVersion}</span>
+                          )}
+                          {r.promoCode && (
+                            <div style={{ fontSize: 11, marginTop: 3, display: "inline-flex", alignItems: "center", gap: 4, color: r.promoLive ? "#6D28D9" : "#94A3B8" }}>
+                              <Tag size={10} strokeWidth={2.4} />
+                              <span style={{ fontWeight: 700, fontFamily: "ui-monospace, monospace" }}>{r.promoCode}</span>
+                              {r.promoEndsAt && (
+                                <span>{r.promoLive ? `έως ${fmtDate(r.promoEndsAt)}` : `έληξε`}</span>
+                              )}
+                            </div>
+                          )}
                         </td>
                         <td style={{ padding: "12px 14px" }}><Pill meta={meta} /></td>
                         <td style={{ padding: "12px 14px", textAlign: "right", fontSize: 13, fontWeight: 600, color: "#0F172A" }}>
-                          {r.sub ? eur(r.price) : <span style={{ color: "#CBD5E1" }}>—</span>}
+                          {r.sub ? (
+                            <>
+                              {eur(r.price)}
+                              {r.listPrice > r.price && (
+                                <span style={{ marginLeft: 6, fontSize: 11.5, fontWeight: 400, color: "#94A3B8", textDecoration: "line-through" }}>{eur(r.listPrice)}</span>
+                              )}
+                            </>
+                          ) : <span style={{ color: "#CBD5E1" }}>—</span>}
                         </td>
                         <td style={{ padding: "12px 14px", textAlign: "right", fontSize: 13, fontWeight: 700, color: r.fee > 0 ? "#1D4ED8" : "#94A3B8" }}>
                           {eur(r.fee)}
+                          {r.listFee > r.fee && !r.fee_exempt && (
+                            <span style={{ marginLeft: 6, fontSize: 11.5, fontWeight: 400, color: "#94A3B8", textDecoration: "line-through" }}>{eur(r.listFee)}</span>
+                          )}
                         </td>
                         <td style={{ padding: "12px 14px", textAlign: "right", fontSize: 12, color: "#64748B", whiteSpace: "nowrap" }}>
                           {fmtDate(r.sub?.current_period_end)}
@@ -787,6 +851,7 @@ export default function SubscriptionsPage() {
           busy={busy}
           onClose={() => setPlanModal(null)}
           onSave={savePlan}
+          subscribers={planModal.id ? rows.filter((r) => r.sub && r.sub.plan_id === planModal.id && ["active", "trialing", "past_due", "exempt"].includes(r.status)).length : 0}
           onDelete={planModal.id ? () => deletePlan(planModal.id) : null}
         />
       )}
@@ -811,16 +876,23 @@ export default function SubscriptionsPage() {
 // ════════════════════════════════════════════════════════════════════════
 // MODAL: ΕΠΕΞΕΡΓΑΣΙΑ ΠΑΚΕΤΟΥ
 // ════════════════════════════════════════════════════════════════════════
-function PlanModal({ initial, onClose, onSave, onDelete, busy }) {
+function PlanModal({ initial, onClose, onSave, onDelete, busy, subscribers = 0 }) {
   const [f, setF] = useState({
     code: "", name_el: "", name_en: "", description_el: "", description_en: "",
     price_monthly: 0, price_yearly: "", first_session_fee: 10,
     max_active_requests: "", max_areas: "", featured_listing: false, priority_matching: false,
     rank_weight: 0,
-    features_text: "", badge_label: "", display_order: 0, is_active: true,
+    features_text: "", features_text_en: "", badge_label: "", display_order: 0,
+    is_active: true, is_recommended: false, is_archived: false,
     ...initial,
   });
   const upd = (k, v) => setF((p) => ({ ...p, [k]: v }));
+
+  // Άλλαξε οικονομικός όρος σε πακέτο που ήδη χρησιμοποιείται;
+  const priceChanged = initial.id && (
+    num(f.price_monthly) !== num(initial.price_monthly) ||
+    num(f.first_session_fee) !== num(initial.first_session_fee)
+  );
 
   return (
     <Modal
@@ -837,6 +909,24 @@ function PlanModal({ initial, onClose, onSave, onDelete, busy }) {
         </>
       }
     >
+      {/* Η κεντρική αρχή, ακριβώς τη στιγμή που έχει σημασία */}
+      {priceChanged && subscribers > 0 && (
+        <div style={{ background: "#F0FDF4", border: "1px solid #BBF7D0", borderRadius: 12, padding: "13px 17px", marginBottom: 20, fontSize: 12.5, color: "#166534", lineHeight: 1.65, display: "flex", gap: 10, alignItems: "flex-start" }}>
+          <Lock size={15} strokeWidth={2.2} style={{ marginTop: 1, flexShrink: 0 }} />
+          <span>
+            Άλλαξες οικονομικό όρο. Οι <strong>{subscribers}</strong> ενεργοί συνδρομητές
+            <strong> δεν επηρεάζονται</strong> — κρατούν τους όρους που αποδέχτηκαν.
+            Η νέα τιμή ισχύει μόνο για όποιον επιλέξει το πακέτο από εδώ και πέρα.
+          </span>
+        </div>
+      )}
+
+      {initial.id && initial.version && (
+        <div style={{ fontSize: 11.5, color: "#94A3B8", marginBottom: 14 }}>
+          Τρέχουσα έκδοση πακέτου: <strong>v{initial.version}</strong> · κάθε αλλαγή τιμής ανεβάζει έκδοση
+        </div>
+      )}
+
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
         <Field label="Όνομα (EL)"><Input value={f.name_el} onChange={(e) => upd("name_el", e.target.value)} placeholder="π.χ. Pro" /></Field>
         <Field label="Όνομα (EN)"><Input value={f.name_en} onChange={(e) => upd("name_en", e.target.value)} /></Field>
@@ -881,9 +971,16 @@ function PlanModal({ initial, onClose, onSave, onDelete, busy }) {
         </Field>
       </div>
 
-      <Field label="Χαρακτηριστικά" hint="Ένα ανά γραμμή. Εμφανίζονται στην κάρτα του πακέτου.">
+      <Field label="Χαρακτηριστικά (EL)" hint="Ένα ανά γραμμή. Εμφανίζονται στην κάρτα του πακέτου.">
         <TextArea value={f.features_text} onChange={(e) => upd("features_text", e.target.value)} rows={5}
           placeholder={"Απεριόριστα αιτήματα\nΠροβολή στην κορυφή\nΥποστήριξη κατά προτεραιότητα"} />
+      </Field>
+
+      {/* Το onboarding του θεραπευτή είναι δίγλωσσο. Χωρίς αγγλικά
+          χαρακτηριστικά, ο αγγλόφωνος βλέπει ελληνικά μέσα σε αγγλική οθόνη. */}
+      <Field label="Χαρακτηριστικά (EN)" hint="Ένα ανά γραμμή. Αν μείνει κενό, εμφανίζονται τα ελληνικά.">
+        <TextArea value={f.features_text_en} onChange={(e) => upd("features_text_en", e.target.value)} rows={3}
+          placeholder={"Unlimited requests\nTop placement\nPriority support"} />
       </Field>
 
       <Field
@@ -924,7 +1021,15 @@ function PlanModal({ initial, onClose, onSave, onDelete, busy }) {
       <Toggle checked={f.priority_matching} onChange={() => upd("priority_matching", !f.priority_matching)}
         label="Προτεραιότητα στα αιτήματα" hint="Λαμβάνουν πρώτοι νέα αιτήματα στην περιοχή τους" />
       <Toggle checked={f.is_active} onChange={() => upd("is_active", !f.is_active)}
-        label="Ενεργό πακέτο" hint="Μόνο τα ενεργά μπορούν να ανατεθούν σε θεραπευτές" />
+        label="Ενεργό πακέτο" hint="Μόνο τα ενεργά εμφανίζονται στο onboarding και μπορούν να ανατεθούν" />
+
+      <Toggle checked={f.is_recommended} onChange={() => upd("is_recommended", !f.is_recommended)}
+        label="Προτεινόμενο" hint="Προβάλλεται με σήμα στην επιλογή πακέτου του θεραπευτή" />
+
+      {/* Η αρχειοθέτηση κρύβει το πακέτο από ΝΕΕΣ εγγραφές χωρίς να
+          αγγίζει κανέναν υπάρχοντα — προτιμότερη από τη διαγραφή. */}
+      <Toggle checked={f.is_archived} onChange={() => upd("is_archived", !f.is_archived)}
+        label="Αρχειοθετημένο" hint="Κρύβεται από νέες εγγραφές. Οι υπάρχοντες συνδρομητές δεν επηρεάζονται." />
     </Modal>
   );
 }
