@@ -1,747 +1,631 @@
 "use client";
 import { useState, useEffect } from "react";
 import { supabase } from "../lib/supabase";
-
-// ─── Δυναμική εμφάνιση ΟΛΩΝ των καταχωρημένων στοιχείων του χρήστη ───
-const FIELD_LABELS = {
-  name: "Όνομα", full_name: "Ονοματεπώνυμο", email: "Email",
-  phone: "Τηλέφωνο", phone2: "Τηλέφωνο 2", mobile: "Κινητό", telephone: "Τηλέφωνο",
-  address: "Διεύθυνση", area: "Περιοχή", region: "Περιοχή", city: "Πόλη",
-  postal_code: "Τ.Κ.", zip: "Τ.Κ.", zip_code: "Τ.Κ.",
-  iban: "IBAN", bank: "Τράπεζα", bank_name: "Τράπεζα", bank_account: "Αρ. Λογαριασμού",
-  payout_name: "Δικαιούχος", account_holder: "Δικαιούχος", beneficiary: "Δικαιούχος",
-  afm: "ΑΦΜ", vat: "ΑΦΜ", tax_id: "ΑΦΜ", amka: "ΑΜΚΑ", doy: "ΔΟΥ",
-  date_of_birth: "Ημ. Γέννησης", birth_date: "Ημ. Γέννησης", gender: "Φύλο",
-  emergency_contact: "Επαφή έκτακτης ανάγκης", emergency_phone: "Τηλ. έκτακτης ανάγκης",
-  notes: "Σημειώσεις χρήστη",
-};
-const CONTACT_ORDER = [
-  "email", "phone", "mobile", "telephone", "phone2",
-  "emergency_contact", "emergency_phone",
-  "address", "area", "region", "city", "postal_code", "zip", "zip_code",
-  "iban", "bank", "bank_name", "bank_account", "payout_name", "account_holder", "beneficiary",
-  "afm", "vat", "tax_id", "amka", "doy",
-  "date_of_birth", "birth_date", "gender", "notes",
-];
-const CONTACT_EXCLUDE = new Set([
-  "id", "user_id", "auth_id", "created_at", "updated_at",
-  "support_tags", "admin_comment", "name", "full_name",
-  "requests", "reviews", "totalRequests", "completed", "active", "cancelled", "unpaid", "lastActivity",
-  "photo_url", "avatar_url", "is_approved", "application_status", "reject_reason_code",
-  "license_verified", "verified_at", "verified_by", "license_url", "cv_url", "certifications_urls",
-  "service_areas", "is_profile_complete", "is_profile_full", "is_paused", "paused_reason",
-  "quality_score", "completeness_score", "subscription_exempt", "fee_exempt", "exempt_reason",
-  "terms_accepted_at", "rank_weight", "availability_slots",
-  "specialty", "price_per_session", "years_experience", "bio",
-  "education_school", "education_year", "education_degree", "response_time_hours",
-]);
-function cmPretty(k) { return FIELD_LABELS[k] || k.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()); }
-function cmShowable(v) { return v !== null && v !== undefined && v !== "" && typeof v !== "object" && typeof v !== "boolean"; }
-function buildContactRows(rec, fmtDate) {
-  if (!rec) return [];
-  const knownSet = new Set(CONTACT_ORDER);
-  const known = CONTACT_ORDER.filter((k) => cmShowable(rec[k])).map((k) => [cmPretty(k), String(rec[k])]);
-  const extra = Object.keys(rec)
-    .filter((k) => !CONTACT_EXCLUDE.has(k) && !knownSet.has(k) && cmShowable(rec[k]))
-    .map((k) => [cmPretty(k), String(rec[k])]);
-  const rows = [...known, ...extra];
-  if (rec.created_at && fmtDate) rows.push(["Εγγραφή", fmtDate(rec.created_at)]);
-  return rows;
-}
-
 import {
-  Search, Download, User, Phone, MapPin, Calendar, X, Plus, Trash2,
-  ClipboardList, Star, Wallet, XCircle, CheckCircle2, AlertTriangle,
-  MessageSquare, Tag, Ban, Home,
+  Search, X, Mail, Phone, MapPin, Home, Calendar, Download, Save,
+  Ban, CheckCircle2, AlertTriangle, User, ClipboardList, StickyNote,
+  Tag, Clock, ShieldOff,
 } from "lucide-react";
+import { exportToCsv, csvDate } from "../lib/exportCsv";
 
-// ─── SUPPORT TAGS ────────────────────────────────────────────────────────
-const PATIENT_TAGS = [
-  "Επείγον",
-  "Θέλει follow-up",
-  "Πρόβλημα πληρωμής",
-  "Παράπονο",
-  "VIP / προτεραιότητα",
-  "Χρειάζεται τηλεφώνημα",
-  "Δύσκολη πρόσβαση",
-  "Πολλές ακυρώσεις",
+/*
+  ΑΣΘΕΝΕΙΣ
+
+  Το email ΔΕΝ υπάρχει στο patient_profiles — ζει στο auth.users.
+  Έρχεται μέσω της admin_get_user_contacts (admin-only RPC).
+  Αν λείπει το migration, η σελίδα δουλεύει κανονικά, απλά χωρίς emails.
+
+  Η διεύθυνση εμφανίζεται ΜΟΝΟ εδώ. Δημόσια δεν φαίνεται πουθενά —
+  ο θεραπευτής τη βλέπει μόνο αφού αποδεχτεί το αίτημα.
+*/
+
+const SUPPORT_TAGS = [
+  "Επείγον", "Θέλει follow-up", "Πρόβλημα πληρωμής", "Παράπονο",
+  "VIP", "Χρειάζεται τηλεφώνημα", "Πολλές ακυρώσεις", "Ύποπτη δραστηριότητα",
 ];
 
-// ─── CSV ─────────────────────────────────────────────────────────────────
-function exportCsv(filename, rows) {
-  if (!rows || rows.length === 0) {
-    alert("Δεν υπάρχουν δεδομένα για εξαγωγή.");
-    return;
-  }
-  const headers = Object.keys(rows[0]);
-  const esc = (v) => {
-    const s = v === null || v === undefined ? "" : String(v);
-    return /[";\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
-  };
-  const csv = [headers.join(";"), ...rows.map((r) => headers.map((h) => esc(r[h])).join(";"))].join("\r\n");
-  const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8;" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = filename;
-  a.click();
-  URL.revokeObjectURL(url);
-}
+const num = (v) => (v === null || v === undefined || v === "" ? 0 : Number(v));
 
-// ─── HELPERS ─────────────────────────────────────────────────────────────
 function fmtDate(d) {
   if (!d) return "—";
   return new Date(d).toLocaleDateString("el-GR", { day: "2-digit", month: "2-digit", year: "numeric" });
 }
-
 function fmtDateTime(d) {
   if (!d) return "—";
-  return new Date(d).toLocaleString("el-GR", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" });
+  return new Date(d).toLocaleDateString("el-GR", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" });
 }
 
-const STATUS_LABELS = {
-  pending: { label: "Εκκρεμές", bg: "#FEF3C7", color: "#B45309" },
-  confirmed: { label: "Επιβεβαιωμένο", bg: "#DBEAFE", color: "#1D4ED8" },
-  completed: { label: "Ολοκληρωμένο", bg: "#D1FAE5", color: "#065F46" },
-  cancelled: { label: "Ακυρωμένο", bg: "#FFE4E6", color: "#9F1239" },
-  cancelled_by_admin: { label: "Ακυρώθηκε (admin)", bg: "#FFE4E6", color: "#9F1239" },
-  cancelled_by_patient: { label: "Ακυρώθηκε (ασθενής)", bg: "#FFE4E6", color: "#9F1239" },
-  cancelled_by_therapist: { label: "Ακυρώθηκε (θεραπευτής)", bg: "#FFE4E6", color: "#9F1239" },
-};
+const isCancelled = (s) => String(s || "").startsWith("cancelled");
 
-function StatusBadge({ status }) {
-  const s = STATUS_LABELS[status] || { label: status || "—", bg: "#F1F5F9", color: "#64748B" };
+const STATUS = {
+  pending:   { label: "Εκκρεμεί",      bg: "#FEF3C7", color: "#92400E" },
+  confirmed: { label: "Επιβεβαιωμένο", bg: "#DBEAFE", color: "#1D4ED8" },
+  completed: { label: "Ολοκληρώθηκε",  bg: "#EDE9FE", color: "#5B21B6" },
+  cancelled: { label: "Ακυρώθηκε",     bg: "#FFE4E6", color: "#9F1239" },
+};
+function statusMeta(s) {
+  return STATUS[isCancelled(s) ? "cancelled" : s] || STATUS.pending;
+}
+
+function Avatar({ name, size = 46 }) {
   return (
-    <span style={{ background: s.bg, color: s.color, padding: "3px 10px", borderRadius: 999, fontSize: 11, fontWeight: 700, letterSpacing: "0.04em", textTransform: "uppercase", whiteSpace: "nowrap" }}>
-      {s.label}
+    <div style={{
+      width: size, height: size, borderRadius: "50%",
+      background: "#F0FDF4", color: "#15803D",
+      display: "flex", alignItems: "center", justifyContent: "center",
+      fontSize: size * 0.34, fontWeight: 700, flexShrink: 0,
+    }}>
+      {(name || "?").split(" ").map(n => n[0]).join("").slice(0, 2).toUpperCase()}
+    </div>
+  );
+}
+
+function Badge({ label, bg, color, Icon }) {
+  return (
+    <span style={{ background: bg, color, padding: "3px 10px", borderRadius: 999, fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".04em", display: "inline-flex", alignItems: "center", gap: 4, whiteSpace: "nowrap" }}>
+      {Icon && <Icon size={11} strokeWidth={2.5} />}
+      {label}
     </span>
   );
 }
 
-function Avatar({ name, size = 40 }) {
+function Panel({ title, Icon, children, accent }) {
   return (
-    <div style={{ width: size, height: size, borderRadius: "50%", background: "#F0FDF4", color: "#15803D", display: "flex", alignItems: "center", justifyContent: "center", fontSize: size * 0.33, fontWeight: 700, flexShrink: 0 }}>
-      {(name || "?").split(" ").map((n) => n[0]).join("").slice(0, 2).toUpperCase()}
-    </div>
-  );
-}
-
-function StatCard({ label, value, sub, bg, border, text, Icon }) {
-  return (
-    <div style={{ flex: 1, minWidth: 150, background: bg, border: `1px solid ${border}`, borderRadius: 14, padding: "16px 20px" }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 6 }}>
-        {Icon && <Icon size={13} color={text} strokeWidth={2.5} />}
-        <div style={{ fontSize: 11, fontWeight: 700, color: text, textTransform: "uppercase", letterSpacing: "0.05em" }}>{label}</div>
+    <div style={{ background: "#fff", border: `1px solid ${accent || "#E2E8F0"}`, borderRadius: 14, padding: "18px 20px", marginBottom: 14 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 14 }}>
+        {Icon && <Icon size={15} color="#64748B" strokeWidth={2} />}
+        <span style={{ fontSize: 14, fontWeight: 700, color: "#0F172A" }}>{title}</span>
       </div>
-      <div style={{ fontSize: 28, fontWeight: 700, color: text, lineHeight: 1 }}>{value}</div>
-      {sub && <div style={{ fontSize: 11, color: text, opacity: 0.7, marginTop: 5 }}>{sub}</div>}
+      {children}
     </div>
   );
 }
 
-// ═════════════════════════════════════════════════════════════════════════
-export default function PatientsPage() {
-  const [patients, setPatients] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [user, setUser] = useState(null);
+function Row({ label, value, mono, last, copyable }) {
+  return (
+    <div style={{ display: "flex", justifyContent: "space-between", gap: 14, padding: "9px 0", borderBottom: last ? "none" : "1px solid #F1F5F9", fontSize: 13.5 }}>
+      <span style={{ color: "#64748B", flexShrink: 0 }}>{label}</span>
+      <span style={{ fontWeight: 600, color: "#0F172A", textAlign: "right", wordBreak: "break-word", fontFamily: mono ? "ui-monospace, monospace" : "inherit" }}>
+        {value}
+      </span>
+    </div>
+  );
+}
+
+function ActionBtn({ children, onClick, disabled, bg, color, border, Icon }) {
+  return (
+    <button onClick={onClick} disabled={disabled}
+      style={{
+        padding: "9px 18px", borderRadius: 8,
+        border: border ? `1.5px solid ${border}` : "none",
+        background: bg, color, fontSize: 12.5, fontWeight: 700,
+        cursor: disabled ? "not-allowed" : "pointer",
+        fontFamily: "inherit", opacity: disabled ? 0.6 : 1,
+        display: "inline-flex", alignItems: "center", gap: 6, whiteSpace: "nowrap",
+      }}>
+      {Icon && <Icon size={14} />}
+      {children}
+    </button>
+  );
+}
+
+function Empty({ text }) {
+  return (
+    <div style={{ background: "#fff", border: "1px dashed #E2E8F0", borderRadius: 14, padding: "40px 24px", textAlign: "center", color: "#94A3B8", fontSize: 13.5 }}>
+      {text}
+    </div>
+  );
+}
+
+// ════════════════════════════════════════════════════════════════════════
+function PatientDrawer({ patient, contact, requests, bookings, therapists, onClose, onRefresh }) {
+  const [tab, setTab] = useState("overview");
   const [busy, setBusy] = useState(false);
+  const [comment, setComment] = useState(patient.admin_comment || "");
+  const [tags, setTags] = useState(patient.support_tags || []);
+  const [showBlock, setShowBlock] = useState(false);
+  const [blockReason, setBlockReason] = useState("");
 
-  const [search, setSearch] = useState("");
-  const [filter, setFilter] = useState("all"); // all | active | no_requests | cancellations | unpaid
-  const [area, setArea] = useState("all");
+  useEffect(() => {
+    setComment(patient.admin_comment || "");
+    setTags(patient.support_tags || []);
+  }, [patient.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Drawer
-  const [selected, setSelected] = useState(null);
-  const [tab, setTab] = useState("overview"); // overview | requests | notes
-  const [notes, setNotes] = useState([]);
-  const [newNote, setNewNote] = useState("");
-  const [comment, setComment] = useState("");
+  const therapistName = (id) => therapists.find(t => t.id === id)?.name || "—";
 
-  useEffect(() => { init(); }, []);
-
-  async function init() {
-    const { data: { user } } = await supabase.auth.getUser();
-    setUser(user);
-    await fetchAll();
+  async function saveTags(next) {
+    setTags(next);
+    await supabase.from("patient_profiles").update({ support_tags: next }).eq("id", patient.id);
+    onRefresh();
   }
-
-  async function fetchAll() {
-    setLoading(true);
-
-    const [
-      { data: pts },
-      { data: reqs },
-      { data: bookings },
-      { data: rvs },
-      { data: pays },
-      { data: ths },
-    ] = await Promise.all([
-      supabase.from("patient_profiles").select("*").order("created_at", { ascending: false }),
-      supabase.from("session_requests").select("*").order("created_at", { ascending: false }),
-      supabase.from("session_bookings").select("id, request_id, session_date, session_time, status"),
-      supabase.from("reviews").select("id, patient_id, therapist_id, rating, comment, created_at"),
-      supabase.from("payments").select("id, request_id, therapist_id, amount, status, paid, created_at"),
-      supabase.from("therapist_profiles").select("id, name"),
-    ]);
-
-    const tMap = {};
-    (ths || []).forEach((t) => { tMap[t.id] = t.name; });
-
-    const bookingsByReq = {};
-    (bookings || []).forEach((b) => {
-      if (!bookingsByReq[b.request_id]) bookingsByReq[b.request_id] = [];
-      bookingsByReq[b.request_id].push(b);
-    });
-
-    const payByReq = {};
-    (pays || []).forEach((p) => { payByReq[p.request_id] = p; });
-
-    const enriched = (pts || []).map((p) => {
-      const myReqs = (reqs || [])
-        .filter((r) => r.patient_id === p.id)
-        .map((r) => ({
-          ...r,
-          therapist_name: r.therapist_id ? (tMap[r.therapist_id] || "Άγνωστος") : null,
-          bookings: bookingsByReq[r.id] || [],
-          payment: payByReq[r.id] || null,
-        }));
-
-      const myReviews = (rvs || [])
-        .filter((r) => r.patient_id === p.id)
-        .map((r) => ({ ...r, therapist_name: tMap[r.therapist_id] || "Άγνωστος" }));
-
-      const isCancelled = (s) => (s || "").startsWith("cancelled");
-
-      const completed = myReqs.filter((r) => r.status === "completed").length;
-      const cancelled = myReqs.filter((r) => isCancelled(r.status)).length;
-      const active = myReqs.filter((r) => r.status === "pending" || r.status === "confirmed").length;
-      const unpaid = myReqs.filter((r) => r.payment && !r.payment.paid).length;
-
-      return {
-        ...p,
-        requests: myReqs,
-        reviews: myReviews,
-        totalRequests: myReqs.length,
-        completed,
-        cancelled,
-        active,
-        unpaid,
-        lastActivity: myReqs[0]?.created_at || p.created_at,
-      };
-    });
-
-    setPatients(enriched);
-    setLoading(false);
-  }
-
-  // ─── DRAWER ────────────────────────────────────────────────────────────
-  async function openPatient(p) {
-    setSelected(p);
-    setTab("overview");
-    setComment(p.admin_comment || "");
-    setNewNote("");
-    const { data } = await supabase
-      .from("patient_notes")
-      .select("*")
-      .eq("patient_id", p.id)
-      .order("created_at", { ascending: false });
-    setNotes(data || []);
-  }
-
-  async function refreshSelected(id) {
-    await fetchAll();
-    const { data } = await supabase.from("patient_profiles").select("*").eq("id", id).maybeSingle();
-    if (data) setSelected((prev) => (prev ? { ...prev, ...data } : prev));
-  }
-
-  async function addNote() {
-    if (!newNote.trim()) return;
-    setBusy(true);
-    const { error } = await supabase.from("patient_notes").insert({
-      patient_id: selected.id,
-      body: newNote.trim(),
-      author_id: user?.id,
-      author_email: user?.email,
-    });
-    if (error) { alert("Σφάλμα: " + error.message); setBusy(false); return; }
-    const { data } = await supabase
-      .from("patient_notes").select("*")
-      .eq("patient_id", selected.id)
-      .order("created_at", { ascending: false });
-    setNotes(data || []);
-    setNewNote("");
-    setBusy(false);
-  }
-
-  async function deleteNote(id) {
-    if (!confirm("Διαγραφή σημείωσης;")) return;
-    setBusy(true);
-    await supabase.from("patient_notes").delete().eq("id", id);
-    setNotes((n) => n.filter((x) => x.id !== id));
-    setBusy(false);
-  }
-
-  async function toggleTag(tag) {
-    const current = selected.support_tags || [];
-    const next = current.includes(tag) ? current.filter((t) => t !== tag) : [...current, tag];
-    setSelected({ ...selected, support_tags: next });
-    setBusy(true);
-    await supabase.from("patient_profiles").update({ support_tags: next }).eq("id", selected.id);
-    await refreshSelected(selected.id);
-    setBusy(false);
+  function toggleTag(t) {
+    saveTags(tags.includes(t) ? tags.filter(x => x !== t) : [...tags, t]);
   }
 
   async function saveComment() {
     setBusy(true);
-    const { error } = await supabase
-      .from("patient_profiles")
-      .update({ admin_comment: comment.trim() || null })
-      .eq("id", selected.id);
-    if (error) alert("Σφάλμα: " + error.message);
-    await refreshSelected(selected.id);
+    await supabase.from("patient_profiles").update({ admin_comment: comment.trim() || null }).eq("id", patient.id);
     setBusy(false);
-    alert("Η σημείωση αποθηκεύτηκε.");
+    onRefresh();
   }
 
-  async function toggleBlock() {
-    const blocking = !selected.is_blocked;
-    let reason = null;
-    if (blocking) {
-      reason = prompt("Λόγος αποκλεισμού ασθενή:");
-      if (reason === null) return;
-      if (!reason.trim()) { alert("Χρειάζεται λόγος."); return; }
-    } else {
-      if (!confirm("Άρση αποκλεισμού;")) return;
-    }
+  async function block() {
+    if (!blockReason.trim()) { alert("Γράψε τον λόγο αποκλεισμού."); return; }
     setBusy(true);
     await supabase.from("patient_profiles").update({
-      is_blocked: blocking,
-      blocked_reason: blocking ? reason.trim() : null,
-    }).eq("id", selected.id);
-    await refreshSelected(selected.id);
+      is_blocked: true,
+      blocked_reason: blockReason.trim(),
+    }).eq("id", patient.id);
     setBusy(false);
+    setShowBlock(false);
+    setBlockReason("");
+    onRefresh();
   }
 
-  // ─── FILTER ────────────────────────────────────────────────────────────
-  const areas = [...new Set(patients.map((p) => p.area).filter(Boolean))].sort((a, b) => a.localeCompare(b, "el"));
+  async function unblock() {
+    if (!confirm("Άρση αποκλεισμού;")) return;
+    setBusy(true);
+    await supabase.from("patient_profiles").update({ is_blocked: false, blocked_reason: null }).eq("id", patient.id);
+    setBusy(false);
+    onRefresh();
+  }
 
-  const filtered = patients.filter((p) => {
-    if (area !== "all" && p.area !== area) return false;
-    if (filter === "active" && p.active === 0) return false;
-    if (filter === "no_requests" && p.totalRequests > 0) return false;
-    if (filter === "cancellations" && p.cancelled === 0) return false;
-    if (filter === "unpaid" && p.unpaid === 0) return false;
+  const completed = bookings.filter(b => b.status === "completed").length;
+  const cancelledCount = bookings.filter(b => isCancelled(b.status)).length;
+  const upcoming = bookings.filter(b => b.status === "confirmed" && new Date(b.session_date) >= new Date()).length;
+  const spent = bookings.filter(b => b.status === "completed").reduce((s, b) => s + num(b.session_amount), 0);
+
+  const fullAddress = [patient.address, patient.area, patient.city, patient.postal_code].filter(Boolean).join(", ");
+
+  const TABS = [
+    { id: "overview", label: "Στοιχεία", Icon: User },
+    { id: "history",  label: `Ραντεβού (${bookings.length})`, Icon: ClipboardList },
+    { id: "notes",    label: "Σημειώσεις", Icon: StickyNote },
+  ];
+
+  return (
+    <div style={{ position: "fixed", inset: 0, zIndex: 1000, display: "flex", justifyContent: "flex-end" }}>
+      <div onClick={onClose} style={{ position: "absolute", inset: 0, background: "rgba(15,23,42,0.35)" }} />
+
+      <div style={{ position: "relative", width: "min(720px, 94vw)", height: "100%", background: "#F8FAFC", overflowY: "auto", boxShadow: "-8px 0 40px rgba(15,23,42,0.16)" }}>
+
+        <div style={{ background: "#fff", padding: "22px 28px", borderBottom: "1px solid #E2E8F0", position: "sticky", top: 0, zIndex: 5 }}>
+          <div style={{ display: "flex", alignItems: "flex-start", gap: 16 }}>
+            <Avatar name={patient.name} size={54} />
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 9, flexWrap: "wrap", marginBottom: 6 }}>
+                <span style={{ fontSize: 21, fontWeight: 700, color: "#0F172A" }}>{patient.name || "—"}</span>
+                {patient.is_blocked && <Badge label="Αποκλεισμένος" bg="#FEF2F2" color="#BE123C" Icon={Ban} />}
+                {tags.length > 0 && <Badge label={`${tags.length} tags`} bg="#EFF6FF" color="#1D4ED8" Icon={Tag} />}
+              </div>
+              {/* Τα στοιχεία επικοινωνίας ΑΜΕΣΩΣ ορατά — αυτό ζητάει
+                  ο admin πρώτο όταν ανοίγει καρτέλα ασθενή. */}
+              <div style={{ display: "flex", gap: 16, flexWrap: "wrap", fontSize: 13, color: "#64748B" }}>
+                {contact?.email && (
+                  <a href={`mailto:${contact.email}`} style={{ display: "inline-flex", alignItems: "center", gap: 5, color: "#1D4ED8", textDecoration: "none", fontWeight: 600 }}>
+                    <Mail size={13} /> {contact.email}
+                  </a>
+                )}
+                {patient.phone && (
+                  <a href={`tel:${patient.phone}`} style={{ display: "inline-flex", alignItems: "center", gap: 5, color: "#1D4ED8", textDecoration: "none", fontWeight: 600 }}>
+                    <Phone size={13} /> {patient.phone}
+                  </a>
+                )}
+              </div>
+            </div>
+            <button onClick={onClose} style={{ background: "transparent", border: "none", cursor: "pointer", color: "#94A3B8", padding: 4, lineHeight: 0 }}>
+              <X size={22} />
+            </button>
+          </div>
+
+          {patient.is_blocked && patient.blocked_reason && (
+            <div style={{ marginTop: 14, background: "#FEF2F2", border: "1px solid #FECACA", borderRadius: 10, padding: "10px 14px", fontSize: 12.5, color: "#BE123C", lineHeight: 1.6 }}>
+              <strong>Λόγος αποκλεισμού:</strong> {patient.blocked_reason}
+            </div>
+          )}
+
+          <div style={{ display: "flex", gap: 4, background: "#F1F5F9", padding: 4, borderRadius: 10, marginTop: 16, flexWrap: "wrap" }}>
+            {TABS.map(t => {
+              const TIcon = t.Icon;
+              const active = tab === t.id;
+              return (
+                <button key={t.id} onClick={() => setTab(t.id)}
+                  style={{ padding: "8px 15px", borderRadius: 7, border: "none", fontSize: 12.5, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", background: active ? "#fff" : "transparent", color: active ? "#0F172A" : "#64748B", boxShadow: active ? "0 1px 3px rgba(0,0,0,0.08)" : "none", display: "inline-flex", alignItems: "center", gap: 6 }}>
+                  <TIcon size={13} />
+                  {t.label}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        <div style={{ padding: "22px 28px 110px" }}>
+
+          {tab === "overview" && (
+            <>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(125px,1fr))", gap: 12, marginBottom: 20 }}>
+                {[
+                  { label: "Ραντεβού", value: bookings.length, color: "#1D4ED8" },
+                  { label: "Ολοκληρωμένα", value: completed, color: "#15803D" },
+                  { label: "Επερχόμενα", value: upcoming, color: "#6D28D9" },
+                  { label: "Ακυρώσεις", value: cancelledCount, color: "#BE123C" },
+                ].map(c => (
+                  <div key={c.label} style={{ background: "#fff", border: "1px solid #E2E8F0", borderRadius: 12, padding: "16px 18px" }}>
+                    <div style={{ fontSize: 26, fontWeight: 700, color: c.color, lineHeight: 1 }}>{c.value}</div>
+                    <div style={{ fontSize: 12, color: "#64748B", marginTop: 5 }}>{c.label}</div>
+                  </div>
+                ))}
+              </div>
+
+              <Panel title="Επικοινωνία" Icon={Mail}>
+                <Row label="Email" value={contact?.email || "—"} mono />
+                <Row label="Τηλέφωνο" value={patient.phone || "—"} />
+                <Row label="Email επιβεβαιωμένο" value={contact?.email_confirmed_at ? fmtDate(contact.email_confirmed_at) : "Όχι"} />
+                <Row label="Τελευταία σύνδεση" value={contact?.last_sign_in_at ? fmtDateTime(contact.last_sign_in_at) : "—"} />
+                <Row label="Εγγραφή" value={fmtDate(patient.created_at)} last />
+              </Panel>
+
+              {/* Η διεύθυνση δεν εμφανίζεται πουθενά δημόσια.
+                  Ο θεραπευτής τη βλέπει μόνο αφού αποδεχτεί το αίτημα. */}
+              <Panel title="Διεύθυνση" Icon={Home}>
+                {fullAddress ? (
+                  <>
+                    <Row label="Οδός" value={patient.address || "—"} />
+                    <Row label="Περιοχή" value={patient.area || "—"} />
+                    <Row label="Πόλη" value={patient.city || "—"} />
+                    <Row label="ΤΚ" value={patient.postal_code || "—"} last />
+                    <div style={{ marginTop: 12 }}>
+                      <a
+                        href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(fullAddress)}`}
+                        target="_blank" rel="noopener noreferrer"
+                        style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 12.5, fontWeight: 600, color: "#1D4ED8", textDecoration: "none" }}>
+                        <MapPin size={13} />
+                        Άνοιγμα σε χάρτη
+                      </a>
+                    </div>
+                  </>
+                ) : (
+                  <div style={{ fontSize: 13, color: "#94A3B8", fontStyle: "italic" }}>
+                    Δεν έχει καταχωρηθεί διεύθυνση. Ζητείται στο πρώτο ραντεβού.
+                  </div>
+                )}
+              </Panel>
+
+              <Panel title="Support Tags" Icon={Tag}>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 7 }}>
+                  {SUPPORT_TAGS.map(t => {
+                    const on = tags.includes(t);
+                    return (
+                      <button key={t} onClick={() => toggleTag(t)}
+                        style={{ padding: "6px 13px", borderRadius: 999, fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", border: `1.5px solid ${on ? "#1D4ED8" : "#E2E8F0"}`, background: on ? "#EFF6FF" : "#fff", color: on ? "#1D4ED8" : "#64748B" }}>
+                        {t}
+                      </button>
+                    );
+                  })}
+                </div>
+              </Panel>
+            </>
+          )}
+
+          {tab === "history" && (
+            bookings.length === 0 ? <Empty text="Δεν υπάρχουν ραντεβού" /> : (
+              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                {bookings.map(b => {
+                  const meta = statusMeta(b.status);
+                  return (
+                    <div key={b.id} style={{ background: "#fff", border: "1px solid #E2E8F0", borderRadius: 12, padding: "14px 18px" }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 9, flexWrap: "wrap", marginBottom: 6 }}>
+                        <span style={{ fontSize: 14, fontWeight: 700, color: "#0F172A" }}>
+                          {fmtDate(b.session_date)} · {(b.session_time || "").slice(0, 5)}
+                        </span>
+                        <Badge label={meta.label} bg={meta.bg} color={meta.color} />
+                        {num(b.session_amount) > 0 && (
+                          <span style={{ marginLeft: "auto", fontSize: 13, fontWeight: 700, color: "#15803D" }}>
+                            {num(b.session_amount).toFixed(2)}€
+                          </span>
+                        )}
+                      </div>
+                      <div style={{ fontSize: 12.5, color: "#64748B" }}>
+                        Θεραπευτής: {therapistName(b.therapist_id)}
+                        {b.request?.problem_type ? ` · ${b.request.problem_type}` : ""}
+                      </div>
+                      {isCancelled(b.status) && b.cancelled_reason && (
+                        <div style={{ marginTop: 7, fontSize: 12, color: "#9F1239", fontStyle: "italic" }}>
+                          {b.cancelled_reason}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )
+          )}
+
+          {tab === "notes" && (
+            <Panel title="Εσωτερική σημείωση" Icon={StickyNote}>
+              <textarea value={comment} onChange={e => setComment(e.target.value)} rows={6}
+                placeholder="Σημειώσεις ορατές μόνο στο admin..."
+                style={{ width: "100%", padding: "12px 14px", border: "1.5px solid #E2E8F0", borderRadius: 10, fontSize: 13.5, fontFamily: "inherit", outline: "none", resize: "vertical", color: "#0F172A", boxSizing: "border-box" }} />
+              <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 12 }}>
+                <ActionBtn onClick={saveComment} disabled={busy} bg="#0F172A" color="#fff" Icon={Save}>
+                  {busy ? "Αποθήκευση..." : "Αποθήκευση"}
+                </ActionBtn>
+              </div>
+            </Panel>
+          )}
+        </div>
+
+        {/* Action bar */}
+        <div style={{ position: "sticky", bottom: 0, background: "#fff", borderTop: "1px solid #E2E8F0", padding: "14px 28px", display: "flex", gap: 9, flexWrap: "wrap", alignItems: "center" }}>
+          {!patient.is_blocked
+            ? <ActionBtn onClick={() => setShowBlock(true)} disabled={busy} bg="#fff" color="#BE123C" border="#FECDD3" Icon={Ban}>Αποκλεισμός</ActionBtn>
+            : <ActionBtn onClick={unblock} disabled={busy} bg="#15803D" color="#fff" Icon={CheckCircle2}>Άρση αποκλεισμού</ActionBtn>}
+          <div style={{ marginLeft: "auto" }}>
+            <ActionBtn onClick={onClose} bg="#fff" color="#64748B" border="#E2E8F0">Κλείσιμο</ActionBtn>
+          </div>
+        </div>
+
+        {showBlock && (
+          <div style={{ position: "fixed", inset: 0, background: "rgba(15,23,42,0.5)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 20, padding: 24 }}
+            onClick={e => { if (e.target === e.currentTarget) setShowBlock(false); }}>
+            <div style={{ background: "#fff", borderRadius: 16, padding: 28, maxWidth: 440, width: "100%" }}>
+              <h3 style={{ fontSize: 18, fontWeight: 700, color: "#0F172A", marginBottom: 8 }}>Αποκλεισμός ασθενή</h3>
+              <p style={{ fontSize: 13, color: "#64748B", lineHeight: 1.6, marginBottom: 16 }}>
+                Δεν θα μπορεί να στείλει νέα αιτήματα. Τα υπάρχοντα ραντεβού δεν ακυρώνονται αυτόματα.
+              </p>
+              <label style={{ fontSize: 12.5, fontWeight: 600, color: "#475569", display: "block", marginBottom: 6 }}>Λόγος *</label>
+              <textarea value={blockReason} onChange={e => setBlockReason(e.target.value)} rows={3}
+                style={{ width: "100%", padding: "11px 13px", border: "1.5px solid #E2E8F0", borderRadius: 9, fontSize: 13.5, fontFamily: "inherit", resize: "vertical", marginBottom: 18, color: "#0F172A", boxSizing: "border-box" }} />
+              <div style={{ display: "flex", gap: 9, justifyContent: "flex-end" }}>
+                <ActionBtn onClick={() => setShowBlock(false)} bg="#fff" color="#64748B" border="#E2E8F0">Άκυρο</ActionBtn>
+                <ActionBtn onClick={block} disabled={busy || !blockReason.trim()} bg="#DC2626" color="#fff" Icon={Ban}>Αποκλεισμός</ActionBtn>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ════════════════════════════════════════════════════════════════════════
+export default function PatientsPage({ hideHeader }) {
+  const [patients, setPatients] = useState([]);
+  const [contacts, setContacts] = useState({});
+  const [bookingsByPatient, setBookingsByPatient] = useState({});
+  const [requestsByPatient, setRequestsByPatient] = useState({});
+  const [therapists, setTherapists] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [selected, setSelected] = useState(null);
+  const [search, setSearch] = useState("");
+  const [filter, setFilter] = useState("all");
+  const [contactsError, setContactsError] = useState(false);
+
+  useEffect(() => { fetchAll(); }, []);
+
+  async function fetchAll() {
+    setLoading(true);
+
+    const [{ data: pts }, { data: bks }, { data: reqs }, { data: ths }] = await Promise.all([
+      supabase.from("patient_profiles").select("*").order("created_at", { ascending: false }),
+      supabase.from("session_bookings").select("*").order("session_date", { ascending: false }),
+      supabase.from("session_requests").select("id, patient_id, problem_type, area, status, created_at"),
+      supabase.from("therapist_profiles").select("id, name"),
+    ]);
+
+    const list = pts || [];
+
+    const reqMap = {};
+    (reqs || []).forEach(r => {
+      if (!r.patient_id) return;
+      if (!reqMap[r.patient_id]) reqMap[r.patient_id] = [];
+      reqMap[r.patient_id].push(r);
+    });
+
+    const reqById = {};
+    (reqs || []).forEach(r => { reqById[r.id] = r; });
+
+    const bkMap = {};
+    (bks || []).forEach(b => {
+      if (!b.patient_id) return;
+      if (!bkMap[b.patient_id]) bkMap[b.patient_id] = [];
+      bkMap[b.patient_id].push({ ...b, request: reqById[b.request_id] || null });
+    });
+
+    setPatients(list);
+    setBookingsByPatient(bkMap);
+    setRequestsByPatient(reqMap);
+    setTherapists(ths || []);
+
+    // Emails — απαιτεί το migration-admin-contacts.sql
+    if (list.length > 0) {
+      const { data: cts, error } = await supabase.rpc("admin_get_user_contacts", { p_ids: list.map(p => p.id) });
+      if (error) {
+        setContactsError(true);
+      } else if (cts) {
+        const cm = {};
+        cts.forEach(c => { cm[c.id] = c; });
+        setContacts(cm);
+        setContactsError(false);
+      }
+    }
+
+    setLoading(false);
+  }
+
+  const withBookings = (id) => (bookingsByPatient[id] || []).length;
+
+  const filtered = patients.filter(p => {
+    if (filter === "active"   && withBookings(p.id) === 0) return false;
+    if (filter === "inactive" && withBookings(p.id) > 0) return false;
+    if (filter === "blocked"  && !p.is_blocked) return false;
+    if (filter === "tagged"   && (p.support_tags || []).length === 0) return false;
     if (search.trim()) {
-      const hay = `${p.name || ""} ${p.phone || ""} ${p.area || ""} ${p.city || ""} ${p.address || ""}`.toLowerCase();
-      if (!hay.includes(search.trim().toLowerCase())) return false;
+      const q = search.toLowerCase();
+      const email = (contacts[p.id]?.email || "").toLowerCase();
+      if (!(p.name || "").toLowerCase().includes(q) &&
+          !(p.phone || "").includes(q) &&
+          !(p.area || "").toLowerCase().includes(q) &&
+          !email.includes(q)) return false;
     }
     return true;
   });
 
   const counts = {
-    all: patients.length,
-    active: patients.filter((p) => p.active > 0).length,
-    no_requests: patients.filter((p) => p.totalRequests === 0).length,
-    cancellations: patients.filter((p) => p.cancelled > 0).length,
-    unpaid: patients.filter((p) => p.unpaid > 0).length,
+    all:      patients.length,
+    active:   patients.filter(p => withBookings(p.id) > 0).length,
+    inactive: patients.filter(p => withBookings(p.id) === 0).length,
+    blocked:  patients.filter(p => p.is_blocked).length,
+    tagged:   patients.filter(p => (p.support_tags || []).length > 0).length,
   };
 
-  function handleExport() {
-    exportCsv(
-      `physiohome-astheneis-${new Date().toISOString().slice(0, 10)}.csv`,
-      filtered.map((p) => ({
-        Όνομα: p.name || "",
-        Τηλέφωνο: p.phone || "",
-        Περιοχή: p.area || "",
-        Πόλη: p.city || "",
-        Διεύθυνση: p.address || "",
-        ΤΚ: p.postal_code || "",
-        Αιτήματα: p.totalRequests,
-        Ενεργά: p.active,
-        Ολοκληρωμένα: p.completed,
-        Ακυρώσεις: p.cancelled,
-        Απλήρωτα: p.unpaid,
-        Αξιολογήσεις: p.reviews.length,
-        Tags: (p.support_tags || []).join(" | "),
-        Αποκλεισμένος: p.is_blocked ? "ΝΑΙ" : "",
-        Εγγραφή: fmtDate(p.created_at),
-      }))
-    );
+  function doExport() {
+    exportToCsv("patients", filtered.map(p => ({
+      Ονοματεπώνυμο: p.name || "",
+      Email: contacts[p.id]?.email || "",
+      Τηλέφωνο: p.phone || "",
+      Διεύθυνση: p.address || "",
+      Περιοχή: p.area || "",
+      Πόλη: p.city || "",
+      ΤΚ: p.postal_code || "",
+      Ραντεβού: withBookings(p.id),
+      Αποκλεισμένος: p.is_blocked ? "Ναι" : "Όχι",
+      Tags: (p.support_tags || []).join(" | "),
+      Εγγραφή: csvDate(p.created_at),
+      ΤελευταίαΣύνδεση: contacts[p.id]?.last_sign_in_at ? csvDate(contacts[p.id].last_sign_in_at) : "",
+    })));
   }
 
-  const selectStyle = { padding: "9px 12px", border: "1px solid #E2E8F0", borderRadius: 8, fontSize: 13, fontFamily: "inherit", background: "#fff", color: "#0F172A", outline: "none", cursor: "pointer" };
+  const TABS = [
+    { id: "all",      label: "Όλοι",           n: counts.all },
+    { id: "active",   label: "Με ραντεβού",    n: counts.active },
+    { id: "inactive", label: "Χωρίς ραντεβού", n: counts.inactive },
+    { id: "tagged",   label: "Με tags",        n: counts.tagged },
+    { id: "blocked",  label: "Αποκλεισμένοι",  n: counts.blocked },
+  ];
 
   if (loading) {
-    return (
-      <div style={{ padding: 24, display: "flex", alignItems: "center", justifyContent: "center", minHeight: 400 }}>
-        <div style={{ fontSize: 16, color: "#64748B" }}>Φόρτωση ασθενών...</div>
-      </div>
-    );
+    return <div style={{ padding: 60, textAlign: "center", color: "#64748B", fontSize: 15 }}>Φόρτωση...</div>;
   }
 
   return (
     <div>
-      {/* HEADER */}
-      <div style={{ display: "flex", alignItems: "flex-start", gap: 16, marginBottom: 24, flexWrap: "wrap" }}>
-        <div style={{ flex: 1, minWidth: 240 }}>
+      {!hideHeader && (
+        <div style={{ marginBottom: 20 }}>
           <h1 style={{ fontSize: 26, fontWeight: 700, color: "#0F172A", margin: 0 }}>Ασθενείς</h1>
-          <p style={{ fontSize: 13, color: "#94A3B8", marginTop: 4 }}>
-            Φάκελος ασθενή — ιστορικό, αιτήματα, πληρωμές, σημειώσεις
-          </p>
+          <p style={{ fontSize: 13, color: "#94A3B8", marginTop: 4 }}>Στοιχεία επικοινωνίας, ιστορικό, υποστήριξη</p>
         </div>
-        <button onClick={handleExport}
-          style={{ padding: "9px 16px", borderRadius: 8, border: "1px solid #E2E8F0", background: "#fff", color: "#475569", fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", display: "inline-flex", alignItems: "center", gap: 6 }}>
+      )}
+
+      {contactsError && (
+        <div style={{ background: "#FFFBEB", border: "1px solid #FDE68A", borderRadius: 12, padding: "13px 17px", marginBottom: 18, fontSize: 12.5, color: "#92400E", display: "flex", gap: 10, alignItems: "flex-start", lineHeight: 1.6 }}>
+          <AlertTriangle size={16} strokeWidth={2.2} style={{ marginTop: 1, flexShrink: 0 }} />
+          <span>
+            Τα emails δεν φορτώθηκαν. Λείπει η συνάρτηση <strong>admin_get_user_contacts</strong> —
+            τρέξε το <strong>migration-admin-contacts.sql</strong> στο Supabase.
+          </span>
+        </div>
+      )}
+
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(165px,1fr))", gap: 14, marginBottom: 22 }}>
+        {[
+          { label: "Σύνολο",         value: counts.all,      sub: "εγγεγραμμένοι",  bg: "#F8FAFC", border: "#E2E8F0", color: "#0F172A", Icon: User },
+          { label: "Με ραντεβού",    value: counts.active,   sub: "ενεργοί",        bg: "#F0FDF4", border: "#BBF7D0", color: "#15803D", Icon: CheckCircle2 },
+          { label: "Χωρίς ραντεβού", value: counts.inactive, sub: "δεν έκλεισαν",   bg: "#FFFBEB", border: "#FDE68A", color: "#B45309", Icon: Clock },
+          { label: "Αποκλεισμένοι",  value: counts.blocked,  sub: "μπλοκαρισμένοι", bg: "#FFF1F2", border: "#FECDD3", color: "#BE123C", Icon: ShieldOff },
+        ].map(c => {
+          const CIcon = c.Icon;
+          return (
+            <div key={c.label} style={{ background: c.bg, border: `1px solid ${c.border}`, borderRadius: 14, padding: "16px 18px" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 8 }}>
+                <CIcon size={14} color={c.color} strokeWidth={2.2} />
+                <span style={{ fontSize: 11, fontWeight: 700, color: c.color, textTransform: "uppercase", letterSpacing: ".05em" }}>{c.label}</span>
+              </div>
+              <div style={{ fontSize: 30, fontWeight: 700, color: c.color, lineHeight: 1 }}>{c.value}</div>
+              <div style={{ fontSize: 12, color: c.color, opacity: 0.75, marginTop: 4 }}>{c.sub}</div>
+            </div>
+          );
+        })}
+      </div>
+
+      <div style={{ display: "flex", gap: 4, background: "#E2E8F0", padding: 4, borderRadius: 12, width: "fit-content", marginBottom: 14, flexWrap: "wrap" }}>
+        {TABS.map(t => {
+          const active = filter === t.id;
+          return (
+            <button key={t.id} onClick={() => setFilter(t.id)}
+              style={{ padding: "8px 15px", borderRadius: 8, border: "none", fontSize: 12.5, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", background: active ? "#fff" : "transparent", color: active ? "#0F172A" : "#64748B", boxShadow: active ? "0 1px 4px rgba(0,0,0,0.1)" : "none" }}>
+              {t.label} <span style={{ opacity: 0.6, marginLeft: 3 }}>{t.n}</span>
+            </button>
+          );
+        })}
+      </div>
+
+      <div style={{ display: "flex", gap: 10, marginBottom: 18, flexWrap: "wrap", alignItems: "center" }}>
+        <div style={{ flex: 1, minWidth: 200, position: "relative" }}>
+          <Search size={15} color="#94A3B8" style={{ position: "absolute", left: 13, top: "50%", transform: "translateY(-50%)", pointerEvents: "none" }} />
+          <input value={search} onChange={e => setSearch(e.target.value)}
+            placeholder="Αναζήτηση ονόματος, email, τηλεφώνου, περιοχής..."
+            style={{ width: "100%", padding: "10px 14px 10px 38px", border: "1.5px solid #E2E8F0", borderRadius: 10, fontSize: 13, fontFamily: "inherit", outline: "none", color: "#0F172A", boxSizing: "border-box" }} />
+        </div>
+        <button onClick={doExport}
+          style={{ padding: "10px 18px", borderRadius: 10, border: "1px solid #E2E8F0", background: "#fff", color: "#475569", fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", display: "inline-flex", alignItems: "center", gap: 6 }}>
           <Download size={14} />
           Εξαγωγή CSV ({filtered.length})
         </button>
       </div>
 
-      {/* KPIs */}
-      <div style={{ display: "flex", gap: 12, marginBottom: 24, flexWrap: "wrap" }}>
-        <StatCard Icon={User}          label="Σύνολο"       value={counts.all}           sub="εγγεγραμμένοι"        bg="#F8FAFC" border="#E2E8F0" text="#475569" />
-        <StatCard Icon={ClipboardList} label="Με ενεργά"     value={counts.active}        sub="σε εξέλιξη"           bg="#EFF6FF" border="#BFDBFE" text="#1D4ED8" />
-        <StatCard Icon={XCircle}       label="Με ακυρώσεις"  value={counts.cancellations} sub="χρειάζονται προσοχή"  bg="#FFF1F2" border="#FECDD3" text="#BE123C" />
-        <StatCard Icon={Wallet}        label="Με απλήρωτα"   value={counts.unpaid}        sub="εκκρεμείς προμήθειες" bg="#FFFBEB" border="#FDE68A" text="#B45309" />
-        <StatCard Icon={AlertTriangle} label="Χωρίς αίτημα"  value={counts.no_requests}   sub="εγγράφηκαν, δεν ζήτησαν" bg="#F1F5F9" border="#E2E8F0" text="#64748B" />
-      </div>
-
-      {/* FILTERS */}
-      <div style={{ display: "flex", gap: 10, marginBottom: 16, alignItems: "center", flexWrap: "wrap" }}>
-        <div style={{ display: "flex", gap: 4, background: "#E2E8F0", padding: 4, borderRadius: 10, flexWrap: "wrap" }}>
-          {[
-            ["all", "Όλοι"],
-            ["active", "Ενεργοί"],
-            ["cancellations", "Με ακυρώσεις"],
-            ["unpaid", "Με απλήρωτα"],
-            ["no_requests", "Χωρίς αίτημα"],
-          ].map(([val, label]) => (
-            <button key={val} onClick={() => setFilter(val)}
-              style={{ padding: "6px 14px", borderRadius: 7, border: "none", fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", background: filter === val ? "#fff" : "transparent", color: filter === val ? "#0F172A" : "#64748B", boxShadow: filter === val ? "0 1px 4px rgba(0,0,0,0.1)" : "none" }}>
-              {label} <span style={{ marginLeft: 4, fontSize: 11, color: filter === val ? "#1D4ED8" : "#94A3B8" }}>{counts[val]}</span>
-            </button>
-          ))}
-        </div>
-
-        <select value={area} onChange={(e) => setArea(e.target.value)} style={selectStyle}>
-          <option value="all">Όλες οι περιοχές</option>
-          {areas.map((a) => <option key={a} value={a}>{a}</option>)}
-        </select>
-
-        <div style={{ flex: 1, minWidth: 200, display: "flex", alignItems: "center", background: "#fff", border: "1px solid #E2E8F0", borderRadius: 8, padding: "0 14px" }}>
-          <Search size={14} color="#94A3B8" />
-          <input type="text" placeholder="Αναζήτηση ονόματος, τηλεφώνου, περιοχής..." value={search} onChange={(e) => setSearch(e.target.value)}
-            style={{ flex: 1, padding: "9px 10px", border: "none", fontSize: 13, fontFamily: "inherit", background: "transparent", outline: "none", color: "#0F172A" }} />
-        </div>
-      </div>
-
-      {/* LIST */}
       {filtered.length === 0 ? (
-        <div style={{ background: "#fff", borderRadius: 14, border: "1px solid #E2E8F0", padding: 48, textAlign: "center" }}>
-          <User size={32} color="#CBD5E1" style={{ margin: "0 auto 12px" }} />
-          <div style={{ fontSize: 14, color: "#94A3B8" }}>
-            {patients.length === 0 ? "Δεν υπάρχουν εγγεγραμμένοι ασθενείς ακόμα." : "Δεν βρέθηκαν ασθενείς με αυτά τα φίλτρα."}
-          </div>
-        </div>
+        <Empty text="Δεν βρέθηκαν ασθενείς" />
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-          {filtered.map((p) => (
-            <div key={p.id} onClick={() => openPatient(p)}
-              style={{ background: "#fff", borderRadius: 14, border: `1px solid ${p.is_blocked ? "#FECDD3" : "#E2E8F0"}`, padding: "16px 20px", display: "flex", alignItems: "center", gap: 14, cursor: "pointer" }}>
+          {filtered.map(p => {
+            const email = contacts[p.id]?.email;
+            const bCount = withBookings(p.id);
+            return (
+              <div key={p.id} onClick={() => setSelected(p)}
+                style={{ background: "#fff", border: "1px solid #E2E8F0", borderRadius: 14, padding: "16px 20px", cursor: "pointer", display: "flex", alignItems: "center", gap: 16, transition: "all .15s" }}
+                onMouseEnter={e => { e.currentTarget.style.borderColor = "#CBD5E1"; e.currentTarget.style.boxShadow = "0 2px 12px rgba(15,23,42,0.06)"; }}
+                onMouseLeave={e => { e.currentTarget.style.borderColor = "#E2E8F0"; e.currentTarget.style.boxShadow = "none"; }}>
 
-              <Avatar name={p.name} />
+                <Avatar name={p.name} size={46} />
 
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-                  <span style={{ fontWeight: 700, fontSize: 15, color: "#0F172A" }}>{p.name || "Χωρίς όνομα"}</span>
-                  {p.is_blocked && (
-                    <span style={{ background: "#FFE4E6", color: "#9F1239", padding: "3px 10px", borderRadius: 999, fontSize: 11, fontWeight: 700, textTransform: "uppercase", display: "inline-flex", alignItems: "center", gap: 4 }}>
-                      <Ban size={11} /> Αποκλεισμένος
-                    </span>
-                  )}
-                  {(p.support_tags || []).slice(0, 2).map((t) => (
-                    <span key={t} style={{ background: "#EFF6FF", color: "#1D4ED8", padding: "3px 10px", borderRadius: 999, fontSize: 11, fontWeight: 600 }}>{t}</span>
-                  ))}
-                  {(p.support_tags || []).length > 2 && (
-                    <span style={{ fontSize: 11, color: "#94A3B8" }}>+{p.support_tags.length - 2}</span>
-                  )}
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 9, flexWrap: "wrap", marginBottom: 5 }}>
+                    <span style={{ fontSize: 15, fontWeight: 700, color: "#0F172A" }}>{p.name || "—"}</span>
+                    {p.is_blocked && <Badge label="Αποκλεισμένος" bg="#FEF2F2" color="#BE123C" Icon={Ban} />}
+                    {(p.support_tags || []).slice(0, 2).map(t => (
+                      <Badge key={t} label={t} bg="#EFF6FF" color="#1D4ED8" />
+                    ))}
+                  </div>
+
+                  <div style={{ display: "flex", gap: 14, flexWrap: "wrap", fontSize: 12.5, color: "#64748B" }}>
+                    {email && <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}><Mail size={12} />{email}</span>}
+                    {p.phone && <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}><Phone size={12} />{p.phone}</span>}
+                    {p.area && <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}><MapPin size={12} />{p.area}</span>}
+                    <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}><Calendar size={12} />{fmtDate(p.created_at)}</span>
+                  </div>
                 </div>
-                <div style={{ fontSize: 12, color: "#64748B", marginTop: 3, display: "flex", gap: 12, flexWrap: "wrap" }}>
-                  {p.phone && <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}><Phone size={11} /> {p.phone}</span>}
-                  {p.area && <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}><MapPin size={11} /> {p.area}</span>}
-                  <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}><Calendar size={11} /> Εγγραφή {fmtDate(p.created_at)}</span>
+
+                <div style={{ textAlign: "right", flexShrink: 0 }}>
+                  <div style={{ fontSize: 20, fontWeight: 700, color: bCount > 0 ? "#15803D" : "#CBD5E1", lineHeight: 1 }}>{bCount}</div>
+                  <div style={{ fontSize: 11, color: "#94A3B8", marginTop: 3 }}>ραντεβού</div>
                 </div>
               </div>
-
-              <div style={{ display: "flex", gap: 18, alignItems: "center", flexShrink: 0, flexWrap: "wrap", justifyContent: "flex-end" }}>
-                <div style={{ textAlign: "center", minWidth: 50 }}>
-                  <div style={{ fontSize: 17, fontWeight: 700, color: "#0F172A" }}>{p.totalRequests}</div>
-                  <div style={{ fontSize: 11, color: "#94A3B8" }}>αιτήματα</div>
-                </div>
-                <div style={{ textAlign: "center", minWidth: 50 }}>
-                  <div style={{ fontSize: 17, fontWeight: 700, color: "#15803D" }}>{p.completed}</div>
-                  <div style={{ fontSize: 11, color: "#94A3B8" }}>ολοκλ.</div>
-                </div>
-                <div style={{ textAlign: "center", minWidth: 50 }}>
-                  <div style={{ fontSize: 17, fontWeight: 700, color: p.cancelled > 0 ? "#BE123C" : "#94A3B8" }}>{p.cancelled}</div>
-                  <div style={{ fontSize: 11, color: "#94A3B8" }}>ακυρώσεις</div>
-                </div>
-              </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
 
-      {/* ═══ DRAWER ═══ */}
       {selected && (
-        <div style={{ position: "fixed", inset: 0, background: "rgba(15,23,42,0.5)", display: "flex", justifyContent: "flex-end", zIndex: 1000 }}
-          onClick={(e) => { if (e.target === e.currentTarget) setSelected(null); }}>
-          <div style={{ background: "#F8FAFC", width: "100%", maxWidth: 720, height: "100%", overflowY: "auto", boxShadow: "-8px 0 40px rgba(0,0,0,0.15)" }}>
-
-            {/* HEADER */}
-            <div style={{ background: "#fff", padding: "20px 24px", borderBottom: "1px solid #E2E8F0", position: "sticky", top: 0, zIndex: 5 }}>
-              <div style={{ display: "flex", alignItems: "flex-start", gap: 14 }}>
-                <Avatar name={selected.name} size={52} />
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-                    <h2 style={{ fontSize: 20, fontWeight: 700, color: "#0F172A", margin: 0 }}>{selected.name || "Χωρίς όνομα"}</h2>
-                    {selected.is_blocked && (
-                      <span style={{ background: "#FFE4E6", color: "#9F1239", padding: "3px 10px", borderRadius: 999, fontSize: 11, fontWeight: 700, textTransform: "uppercase" }}>Αποκλεισμένος</span>
-                    )}
-                  </div>
-                  <div style={{ fontSize: 12, color: "#64748B", marginTop: 4, display: "flex", gap: 12, flexWrap: "wrap" }}>
-                    {selected.phone && <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}><Phone size={11} /> {selected.phone}</span>}
-                    {selected.area && <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}><MapPin size={11} /> {selected.area}</span>}
-                  </div>
-                </div>
-                <button onClick={() => setSelected(null)}
-                  style={{ background: "transparent", border: "none", cursor: "pointer", color: "#94A3B8", padding: 4 }}>
-                  <X size={22} />
-                </button>
-              </div>
-
-              {selected.is_blocked && selected.blocked_reason && (
-                <div style={{ marginTop: 12, padding: "10px 14px", background: "#FFF1F2", border: "1px solid #FECDD3", borderRadius: 8, fontSize: 12, color: "#9F1239" }}>
-                  <strong>Λόγος αποκλεισμού:</strong> {selected.blocked_reason}
-                </div>
-              )}
-
-              {/* TABS */}
-              <div style={{ display: "flex", gap: 4, background: "#E2E8F0", padding: 4, borderRadius: 10, marginTop: 16 }}>
-                {[
-                  ["overview", "Επισκόπηση"],
-                  ["requests", `Αιτήματα (${selected.requests.length})`],
-                  ["notes", `Σημειώσεις (${notes.length})`],
-                ].map(([val, label]) => (
-                  <button key={val} onClick={() => setTab(val)}
-                    style={{ flex: 1, padding: "8px 14px", borderRadius: 7, border: "none", fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", background: tab === val ? "#fff" : "transparent", color: tab === val ? "#0F172A" : "#64748B", boxShadow: tab === val ? "0 1px 4px rgba(0,0,0,0.1)" : "none" }}>
-                    {label}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <div style={{ padding: 24 }}>
-
-              {/* ── TAB: OVERVIEW ── */}
-              {tab === "overview" && (
-                <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-
-                  {/* Stats */}
-                  <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-                    {[
-                      { label: "Αιτήματα", value: selected.totalRequests, color: "#0F172A" },
-                      { label: "Ολοκληρωμένα", value: selected.completed, color: "#15803D" },
-                      { label: "Ακυρώσεις", value: selected.cancelled, color: selected.cancelled > 0 ? "#BE123C" : "#94A3B8" },
-                      { label: "Αξιολογήσεις", value: selected.reviews.length, color: "#B45309" },
-                    ].map((s) => (
-                      <div key={s.label} style={{ flex: 1, minWidth: 110, background: "#fff", border: "1px solid #E2E8F0", borderRadius: 12, padding: "14px 16px" }}>
-                        <div style={{ fontSize: 24, fontWeight: 700, color: s.color, lineHeight: 1 }}>{s.value}</div>
-                        <div style={{ fontSize: 11, color: "#94A3B8", marginTop: 4 }}>{s.label}</div>
-                      </div>
-                    ))}
-                  </div>
-
-                  {/* Στοιχεία */}
-                  <div style={{ background: "#fff", border: "1px solid #E2E8F0", borderRadius: 14, padding: 20 }}>
-                    <div style={{ fontSize: 13, fontWeight: 700, color: "#0F172A", marginBottom: 14, display: "flex", alignItems: "center", gap: 6 }}>
-                      <Home size={14} color="#1D4ED8" /> Στοιχεία επικοινωνίας
-                    </div>
-                    {buildContactRows(selected, fmtDate).map(([k, v]) => (
-                      <div key={k} style={{ display: "flex", padding: "8px 0", borderTop: "1px solid #F1F5F9", fontSize: 13 }}>
-                        <span style={{ width: 150, color: "#94A3B8", flexShrink: 0 }}>{k}</span>
-                        <span style={{ color: v ? "#0F172A" : "#CBD5E1", fontWeight: v ? 600 : 400, wordBreak: "break-word" }}>{v || "—"}</span>
-                      </div>
-                    ))}
-                    {buildContactRows(selected, fmtDate).length === 0 && (
-                      <div style={{ fontSize: 13, color: "#94A3B8", padding: "8px 0" }}>Δεν έχουν καταχωρηθεί στοιχεία.</div>
-                    )}
-                  </div>
-
-                  {/* Tags */}
-                  <div style={{ background: "#fff", border: "1px solid #E2E8F0", borderRadius: 14, padding: 20 }}>
-                    <div style={{ fontSize: 13, fontWeight: 700, color: "#0F172A", marginBottom: 12, display: "flex", alignItems: "center", gap: 6 }}>
-                      <Tag size={14} color="#1D4ED8" /> Support Tags
-                    </div>
-                    <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-                      {PATIENT_TAGS.map((t) => {
-                        const on = (selected.support_tags || []).includes(t);
-                        return (
-                          <button key={t} onClick={() => toggleTag(t)} disabled={busy}
-                            style={{ padding: "6px 14px", borderRadius: 30, border: `1px solid ${on ? "#1D4ED8" : "#E2E8F0"}`, background: on ? "#EFF6FF" : "#fff", color: on ? "#1D4ED8" : "#64748B", fontSize: 12, fontWeight: 600, cursor: busy ? "not-allowed" : "pointer", fontFamily: "inherit" }}>
-                            {t}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-
-                  {/* Admin comment */}
-                  <div style={{ background: "#fff", border: "1px solid #E2E8F0", borderRadius: 14, padding: 20 }}>
-                    <div style={{ fontSize: 13, fontWeight: 700, color: "#0F172A", marginBottom: 12, display: "flex", alignItems: "center", gap: 6 }}>
-                      <MessageSquare size={14} color="#1D4ED8" /> Σχόλιο admin
-                    </div>
-                    <textarea value={comment} onChange={(e) => setComment(e.target.value)} rows={3}
-                      placeholder="π.χ. Προτιμά απογευματινές ώρες. Δεν έχει ασανσέρ."
-                      style={{ width: "100%", padding: "10px 14px", border: "1.5px solid #E2E8F0", borderRadius: 8, fontSize: 13, fontFamily: "inherit", outline: "none", color: "#0F172A", resize: "vertical", boxSizing: "border-box" }} />
-                    <button onClick={saveComment} disabled={busy}
-                      style={{ marginTop: 10, padding: "8px 18px", borderRadius: 8, border: "none", background: busy ? "#94A3B8" : "#1D4ED8", color: "#fff", fontSize: 12, fontWeight: 600, cursor: busy ? "not-allowed" : "pointer", fontFamily: "inherit" }}>
-                      Αποθήκευση
-                    </button>
-                  </div>
-
-                  {/* Reviews */}
-                  {selected.reviews.length > 0 && (
-                    <div style={{ background: "#fff", border: "1px solid #E2E8F0", borderRadius: 14, padding: 20 }}>
-                      <div style={{ fontSize: 13, fontWeight: 700, color: "#0F172A", marginBottom: 12, display: "flex", alignItems: "center", gap: 6 }}>
-                        <Star size={14} color="#B45309" /> Αξιολογήσεις που άφησε
-                      </div>
-                      {selected.reviews.map((r) => (
-                        <div key={r.id} style={{ padding: "10px 0", borderTop: "1px solid #F1F5F9" }}>
-                          <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12 }}>
-                            <span style={{ fontWeight: 700, color: "#B45309" }}>{r.rating}/5</span>
-                            <span style={{ color: "#1D4ED8", fontWeight: 600 }}>{r.therapist_name}</span>
-                            <span style={{ color: "#94A3B8", marginLeft: "auto" }}>{fmtDate(r.created_at)}</span>
-                          </div>
-                          {r.comment && <div style={{ fontSize: 13, color: "#475569", marginTop: 4, fontStyle: "italic" }}>{r.comment}</div>}
-                        </div>
-                      ))}
-                    </div>
-                  )}
-
-                  {/* Block */}
-                  <div style={{ background: "#fff", border: "1px solid #E2E8F0", borderRadius: 14, padding: 20 }}>
-                    <button onClick={toggleBlock} disabled={busy}
-                      style={{ padding: "10px 18px", borderRadius: 8, border: `1px solid ${selected.is_blocked ? "#BBF7D0" : "#FECDD3"}`, background: selected.is_blocked ? "#F0FDF4" : "#FFF1F2", color: selected.is_blocked ? "#15803D" : "#BE123C", fontSize: 13, fontWeight: 600, cursor: busy ? "not-allowed" : "pointer", fontFamily: "inherit", display: "inline-flex", alignItems: "center", gap: 6 }}>
-                      {selected.is_blocked ? <><CheckCircle2 size={14} /> Άρση αποκλεισμού</> : <><Ban size={14} /> Αποκλεισμός ασθενή</>}
-                    </button>
-                  </div>
-                </div>
-              )}
-
-              {/* ── TAB: REQUESTS ── */}
-              {tab === "requests" && (
-                <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-                  {selected.requests.length === 0 ? (
-                    <div style={{ background: "#fff", border: "1px solid #E2E8F0", borderRadius: 14, padding: 40, textAlign: "center", color: "#94A3B8", fontSize: 14 }}>
-                      Ο ασθενής δεν έχει κάνει κανένα αίτημα ακόμα.
-                    </div>
-                  ) : selected.requests.map((r) => (
-                    <div key={r.id} style={{ background: "#fff", border: "1px solid #E2E8F0", borderRadius: 14, padding: 18 }}>
-                      <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginBottom: 10 }}>
-                        <StatusBadge status={r.status} />
-                        <span style={{ fontSize: 11, color: "#64748B", background: "#F1F5F9", padding: "3px 10px", borderRadius: 999, fontWeight: 600 }}>
-                          {r.type === "free_assessment" ? "Δωρεάν εκτίμηση" : "Κράτηση"}
-                        </span>
-                        <span style={{ fontSize: 11, color: "#94A3B8", marginLeft: "auto" }}>{fmtDateTime(r.created_at)}</span>
-                      </div>
-
-                      <div style={{ fontSize: 14, fontWeight: 700, color: "#0F172A", marginBottom: 6 }}>
-                        {r.problem_type || "Χωρίς πάθηση"}
-                      </div>
-                      {r.problem_description && (
-                        <div style={{ fontSize: 13, color: "#475569", marginBottom: 10, lineHeight: 1.5 }}>{r.problem_description}</div>
-                      )}
-
-                      <div style={{ display: "flex", gap: 16, flexWrap: "wrap", fontSize: 12, color: "#64748B" }}>
-                        <span><strong style={{ color: "#0F172A" }}>Θεραπευτής:</strong> {r.therapist_name || <span style={{ color: "#BE123C" }}>Δεν ανατέθηκε</span>}</span>
-                        {r.area && <span><strong style={{ color: "#0F172A" }}>Περιοχή:</strong> {r.area}</span>}
-                        {r.package_size && <span><strong style={{ color: "#0F172A" }}>Πακέτο:</strong> {r.package_size}</span>}
-                      </div>
-
-                      {r.bookings.length > 0 && (
-                        <div style={{ marginTop: 12, paddingTop: 12, borderTop: "1px solid #F1F5F9" }}>
-                          <div style={{ fontSize: 11, fontWeight: 700, color: "#64748B", textTransform: "uppercase", marginBottom: 6 }}>
-                            Συνεδρίες ({r.bookings.length})
-                          </div>
-                          {r.bookings.map((b) => (
-                            <div key={b.id} style={{ fontSize: 12, color: "#475569", padding: "3px 0" }}>
-                              {fmtDate(b.session_date)} {b.session_time || ""} — {b.status || "—"}
-                            </div>
-                          ))}
-                        </div>
-                      )}
-
-                      {r.payment && (
-                        <div style={{ marginTop: 12, paddingTop: 12, borderTop: "1px solid #F1F5F9", display: "flex", alignItems: "center", gap: 8, fontSize: 12 }}>
-                          <Wallet size={13} color="#94A3B8" />
-                          <span style={{ color: "#64748B" }}>Προμήθεια {r.payment.amount}€ —</span>
-                          <span style={{ fontWeight: 700, color: r.payment.paid ? "#15803D" : "#BE123C" }}>
-                            {r.payment.paid ? "Εισπράχθηκε" : "Απλήρωτη"}
-                          </span>
-                        </div>
-                      )}
-
-                      {r.cancelled_reason && (
-                        <div style={{ marginTop: 12, padding: "10px 14px", background: "#FFF1F2", border: "1px solid #FECDD3", borderRadius: 8, fontSize: 12, color: "#9F1239" }}>
-                          <strong>Λόγος ακύρωσης:</strong> {r.cancelled_reason}
-                        </div>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              )}
-
-              {/* ── TAB: NOTES ── */}
-              {tab === "notes" && (
-                <div>
-                  <div style={{ background: "#fff", border: "1px solid #E2E8F0", borderRadius: 14, padding: 20, marginBottom: 16 }}>
-                    <textarea value={newNote} onChange={(e) => setNewNote(e.target.value)} rows={3}
-                      placeholder="Νέα εσωτερική σημείωση... (π.χ. Τηλεφώνησε, ζήτησε αλλαγή ώρας)"
-                      style={{ width: "100%", padding: "10px 14px", border: "1.5px solid #E2E8F0", borderRadius: 8, fontSize: 13, fontFamily: "inherit", outline: "none", color: "#0F172A", resize: "vertical", boxSizing: "border-box" }} />
-                    <button onClick={addNote} disabled={busy || !newNote.trim()}
-                      style={{ marginTop: 10, padding: "8px 18px", borderRadius: 8, border: "none", background: busy || !newNote.trim() ? "#94A3B8" : "#1D4ED8", color: "#fff", fontSize: 12, fontWeight: 600, cursor: busy || !newNote.trim() ? "not-allowed" : "pointer", fontFamily: "inherit", display: "inline-flex", alignItems: "center", gap: 6 }}>
-                      <Plus size={13} /> Προσθήκη σημείωσης
-                    </button>
-                  </div>
-
-                  {notes.length === 0 ? (
-                    <div style={{ background: "#fff", border: "1px solid #E2E8F0", borderRadius: 14, padding: 40, textAlign: "center", color: "#94A3B8", fontSize: 14 }}>
-                      Δεν υπάρχουν σημειώσεις για αυτόν τον ασθενή.
-                    </div>
-                  ) : (
-                    <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                      {notes.map((n) => (
-                        <div key={n.id} style={{ background: "#fff", border: "1px solid #E2E8F0", borderRadius: 12, padding: "14px 18px" }}>
-                          <div style={{ fontSize: 13, color: "#0F172A", lineHeight: 1.6, whiteSpace: "pre-wrap" }}>{n.body}</div>
-                          <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 8, fontSize: 11, color: "#94A3B8" }}>
-                            <span>{n.author_email || "Admin"}</span>
-                            <span>·</span>
-                            <span>{fmtDateTime(n.created_at)}</span>
-                            <button onClick={() => deleteNote(n.id)} disabled={busy}
-                              style={{ marginLeft: "auto", background: "transparent", border: "none", color: "#CBD5E1", cursor: busy ? "not-allowed" : "pointer", padding: 2, display: "inline-flex" }}>
-                              <Trash2 size={13} />
-                            </button>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              )}
-
-            </div>
-          </div>
-        </div>
+        <PatientDrawer
+          patient={patients.find(p => p.id === selected.id) || selected}
+          contact={contacts[selected.id]}
+          requests={requestsByPatient[selected.id] || []}
+          bookings={bookingsByPatient[selected.id] || []}
+          therapists={therapists}
+          onClose={() => setSelected(null)}
+          onRefresh={fetchAll}
+        />
       )}
     </div>
   );
