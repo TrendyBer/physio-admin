@@ -35,7 +35,16 @@ export default function ReportsPage() {
     totalPatients: 0,
     totalReviews: 0, publishedReviews: 0, avgRating: 0,
     totalBookings: 0,
-    commission: 20,
+    // ΠΡΑΓΜΑΤΙΚΑ ΕΣΟΔΑ.
+    // Το παλιό νούμερο ήταν «ολοκληρωμένα αιτήματα × προμήθεια», που είναι
+    // λάθος με δύο τρόπους:
+    //   1. Η προμήθεια ήταν 20€ ενώ το τέλος είναι 10€.
+    //   2. Το τέλος χρεώνεται ΜΙΑ ΦΟΡΑ ανά νέο ασθενή, όχι ανά συνεδρία.
+    //      Ασθενής με 6 συνεδρίες έδινε 6 × 20€ = 120€ αντί για 10€.
+    // Τώρα διαβάζουμε τον πίνακα payments, δηλαδή τι χρεώθηκε πραγματικά.
+    feeCharges: 0, feePaid: 0, feeUnpaid: 0,
+    revenueCollected: 0, revenueOutstanding: 0,
+    defaultFee: 10,
   });
   const [topTherapists, setTopTherapists] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -51,16 +60,25 @@ export default function ReportsPage() {
       { data: bookings },
       { data: reviews },
       { data: settingsData },
+      { data: paymentsData },
     ] = await Promise.all([
       supabase.from("session_requests").select("id, status, type, therapist_id, created_at"),
       supabase.from("therapist_profiles").select("id, name, specialty, area, is_approved, application_status, photo_url"),
       supabase.from("patient_profiles").select("id"),
-      supabase.from("session_bookings").select("id, request_id, status"),
+      supabase.from("session_bookings").select("id, request_id, status, therapist_id, session_amount, net_to_therapist"),
       supabase.from("reviews").select("rating, therapist_id, is_published"),
-      supabase.from("platform_settings").select("value").eq("key","commission").maybeSingle(),
+      supabase.from("platform_settings").select("value").eq("key","first_session_fee_default").maybeSingle(),
+      supabase.from("payments").select("id, amount, paid, status, therapist_id, created_at"),
     ]);
 
-    const commission = parseInt(settingsData?.value || 20);
+    const defaultFee = parseFloat(settingsData?.value) || 10;
+    const pay = paymentsData || [];
+
+    // Εισπραγμένα vs ανεξόφλητα. Το `paid` είναι η πηγή αλήθειας —
+    // το `status` κρατάει και παλιές τιμές από το προηγούμενο μοντέλο.
+    const paidRows = pay.filter(p => p.paid || p.status === "paid");
+    const openRows = pay.filter(p => !p.paid && p.status !== "paid" && p.status !== "refunded");
+    const sumAmt = (arr) => arr.reduce((a, b) => a + (parseFloat(b.amount) || 0), 0);
     const rq = requests || [];
     const th = therapists || [];
     const pt = patients || [];
@@ -85,6 +103,14 @@ export default function ReportsPage() {
       therapistRatings[r.therapist_id].count++;
     });
 
+    // Τζίρος θεραπευτή: τι εισέπραξε ΑΥΤΟΣ σε μετρητά από ολοκληρωμένες
+    // συνεδρίες. Δεν είναι έσοδο της πλατφόρμας.
+    const therapistRevenue = {};
+    bk.filter(b => b.status === "completed" && b.therapist_id).forEach(b => {
+      const amt = parseFloat(b.net_to_therapist ?? b.session_amount) || 0;
+      therapistRevenue[b.therapist_id] = (therapistRevenue[b.therapist_id] || 0) + amt;
+    });
+
     const top = Object.entries(therapistCases)
       .sort((a,b) => b[1]-a[1])
       .slice(0, 5)
@@ -97,6 +123,7 @@ export default function ReportsPage() {
           area: t?.area || "",
           photo_url: t?.photo_url || null,
           cases,
+          revenue: therapistRevenue[tId] ? Math.round(therapistRevenue[tId] * 100) / 100 : 0,
           rating: therapistRatings[tId]
             ? (therapistRatings[tId].sum/therapistRatings[tId].count).toFixed(1)
             : null,
@@ -124,7 +151,12 @@ export default function ReportsPage() {
       publishedReviews:   publishedRvs.length,
       avgRating,
       totalBookings:      bk.length,
-      commission,
+      feeCharges:         pay.length,
+      feePaid:            paidRows.length,
+      feeUnpaid:          openRows.length,
+      revenueCollected:   Math.round(sumAmt(paidRows) * 100) / 100,
+      revenueOutstanding: Math.round(sumAmt(openRows) * 100) / 100,
+      defaultFee,
     });
     setTopTherapists(top);
     setLoading(false);
@@ -138,7 +170,7 @@ export default function ReportsPage() {
       ["Επιβεβαιωμένα (σε εξέλιξη)",       stats.confirmedRequests],
       ["Εκκρεμή (χωρίς ανάθεση)",          stats.pendingRequests],
       ["Ακυρωμένα",                        stats.cancelledRequests],
-      ["Κρατήσεις Πακέτων",                stats.bookingRequests],
+      ["Αιτήματα ραντεβού",                stats.bookingRequests],
       ["Δωρεάν Εκτιμήσεις",                stats.freeAssessments],
       ["Εγκεκριμένοι Θεραπευτές",          stats.approvedTherapists],
       ["Σε αναμονή έγκρισης",              stats.pendingTherapists],
@@ -146,6 +178,9 @@ export default function ReportsPage() {
       ["Συνολικές Συνεδρίες",              stats.totalBookings],
       ["Δημοσιευμένα Reviews",             stats.publishedReviews],
       ["Μέση Βαθμολογία",                  stats.avgRating],
+      ["Έσοδα εισπραγμένα (€)",            stats.revenueCollected],
+      ["Έσοδα ανεξόφλητα (€)",             stats.revenueOutstanding],
+      ["Χρεώσεις τέλους νέου ασθενή",      stats.feeCharges],
     ].map(([k,v])=>`${k},${v}`).join("\n");
 
     const blob = new Blob(["\uFEFF" + headers + rows], { type:"text/csv;charset=utf-8;" });
@@ -209,12 +244,22 @@ export default function ReportsPage() {
         <KPICard label="Συνολικοί Ασθενείς"       value={stats.totalPatients}      sub="εγγεγραμμένοι"                          bg="#EFF6FF" border="#BFDBFE" text="#1D4ED8"/>
       </div>
 
-      {/* Section: Έσοδα (placeholder until Stripe) */}
-      <div style={{ fontSize:12, fontWeight:700, color:"#64748B", textTransform:"uppercase", letterSpacing:"0.05em", marginBottom:12 }}>💰 Εκτίμηση Εσόδων</div>
-      <div style={{ display:"flex", gap:12, marginBottom:24, flexWrap:"wrap" }}>
-        <KPICard label="Δυνητικά Έσοδα"      value={`${stats.completedRequests * stats.commission}€`} sub="από ολοκληρωμένα × προμήθεια" bg="#F0FDF4" border="#BBF7D0" text="#15803D"/>
-        <KPICard label="Σε Εξέλιξη"           value={`${stats.confirmedRequests * stats.commission}€`} sub="θα μετρηθούν όταν ολοκληρωθούν" bg="#EFF6FF" border="#BFDBFE" text="#1D4ED8"/>
-        <KPICard label="Προμήθεια/Περιστ."    value={`${stats.commission}€`}  sub="ρύθμιση στο Settings" bg="#FFFBEB" border="#FDE68A" text="#B45309"/>
+      {/* ── ΕΣΟΔΑ ──
+          ΠΡΑΓΜΑΤΙΚΑ νούμερα από τον πίνακα payments, όχι εκτίμηση.
+          Το τέλος νέου ασθενή χρεώνεται ΜΙΑ φορά ανά νέο ασθενή· ένας
+          ασθενής με 6 συνεδρίες δίνει 10€, όχι 60€. */}
+      <div style={{ fontSize:12, fontWeight:700, color:"#64748B", textTransform:"uppercase", letterSpacing:"0.05em", marginBottom:12 }}>Έσοδα πλατφόρμας</div>
+      <div style={{ display:"flex", gap:12, marginBottom:12, flexWrap:"wrap" }}>
+        <KPICard label="Εισπραγμένα"        value={`${stats.revenueCollected}€`}   sub={`${stats.feePaid} εξοφλημένα τέλη`}      bg="#F0FDF4" border="#BBF7D0" text="#15803D"/>
+        <KPICard label="Ανεξόφλητα"         value={`${stats.revenueOutstanding}€`} sub={`${stats.feeUnpaid} εκκρεμούν`}          bg="#FFFBEB" border="#FDE68A" text="#B45309"/>
+        <KPICard label="Χρεώσεις σύνολο"    value={stats.feeCharges}               sub="τέλη νέου ασθενή"                        bg="#EFF6FF" border="#BFDBFE" text="#1D4ED8"/>
+        <KPICard label="Τέλος/νέο ασθενή"   value={`${stats.defaultFee}€`}         sub="προεπιλογή · ρύθμιση στα Πακέτα"         bg="#F8FAFC" border="#E2E8F0" text="#475569"/>
+      </div>
+
+      <div style={{ background:"#EFF6FF", border:"1px solid #BFDBFE", borderRadius:12, padding:"12px 16px", marginBottom:24, fontSize:12.5, color:"#1E40AF", lineHeight:1.65 }}>
+        Ο ασθενής πληρώνει τον θεραπευτή <strong>απευθείας σε μετρητά</strong>. Η πλατφόρμα δεν κρατάει
+        τίποτα από τη συνεδρία — το μοναδικό έσοδο είναι το τέλος νέου ασθενή, που χρεώνεται
+        <strong> μία φορά</strong> για κάθε νέο ζευγάρι ασθενή–θεραπευτή.
       </div>
 
       {/* Section: Reviews */}
@@ -231,7 +276,7 @@ export default function ReportsPage() {
           <div style={{ fontSize:12, fontWeight:700, color:"#64748B", textTransform:"uppercase", letterSpacing:"0.05em", marginBottom:12 }}>🏆 Top Θεραπευτές (βάσει περιστατικών)</div>
           <div style={{ background:"#fff", borderRadius:14, border:"1px solid #E2E8F0", overflow:"hidden", marginBottom:24 }}>
             <div style={{ display:"grid", gridTemplateColumns:"50px 2fr 1fr 100px 120px 100px", padding:"10px 20px", background:"#F8FAFC", fontSize:11, fontWeight:700, color:"#64748B", textTransform:"uppercase", letterSpacing:"0.04em" }}>
-              <span>#</span><span>Θεραπευτής</span><span>Περιοχή</span><span>Περιστ.</span><span>Rating</span><span>Έσοδα</span>
+              <span>#</span><span>Θεραπευτής</span><span>Περιοχή</span><span>Περιστ.</span><span>Rating</span><span>Τζίρος</span>
             </div>
             {topTherapists.map((t,i) => (
               <div key={t.id} style={{ display:"grid", gridTemplateColumns:"50px 2fr 1fr 100px 120px 100px", padding:"12px 20px", borderTop:"1px solid #F1F5F9", alignItems:"center", background:i===0?"#FFFBEB":(i%2===0?"#fff":"#FAFAFA") }}>
@@ -248,7 +293,11 @@ export default function ReportsPage() {
                 <span style={{ fontSize:13, color:"#475569" }}>{t.area || "—"}</span>
                 <span style={{ fontSize:18, fontWeight:700, color:"#0F172A" }}>{t.cases}</span>
                 {t.rating ? <Stars rating={t.rating}/> : <span style={{ fontSize:12, color:"#94A3B8" }}>—</span>}
-                <span style={{ fontSize:14, fontWeight:600, color:"#15803D" }}>{t.cases * stats.commission}€</span>
+                {/* Τζίρος του ΘΕΡΑΠΕΥΤΗ, όχι έσοδο της πλατφόρμας.
+                    Παλιά έγραφε «Έσοδα» και πολλαπλασίαζε με την προμήθεια. */}
+                <span style={{ fontSize:14, fontWeight:600, color:"#475569" }} title="Τζίρος θεραπευτή, όχι έσοδο πλατφόρμας">
+                  {t.revenue ? `${t.revenue}€` : "—"}
+                </span>
               </div>
             ))}
           </div>

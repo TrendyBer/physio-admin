@@ -3,7 +3,7 @@ import { useState, useEffect } from "react";
 import { supabase } from "../lib/supabase";
 import {
   Info, Save, Check, AlertTriangle, Repeat, Bell, User, SlidersHorizontal,
-  Eye, EyeOff, Ban, Clock, TrendingUp, Mail, Inbox,
+  Eye, EyeOff, Ban, Clock, TrendingUp, Mail, Inbox, Building2, Plus, X,
 } from "lucide-react";
 
 const num = (v) => (v === null || v === undefined || v === "" ? 0 : Number(v));
@@ -143,6 +143,9 @@ export default function SettingsPage() {
   });
 
   const [stats, setStats] = useState({ activeSubs: 0, mrr: 0, firstSessions: 0 });
+  const [cities, setCities] = useState([]);
+  const [cityBusy, setCityBusy] = useState(false);
+  const [newCity, setNewCity] = useState({ code: "", name_el: "", name_en: "" });
   const [activeTab, setActiveTab] = useState("general");
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -190,8 +193,51 @@ export default function SettingsPage() {
     setPwSaving(false);
   }
 
+  // ΠΟΛΕΙΣ
+  // Η ενεργοποίηση νέας πόλης ήταν αδύνατη χωρίς SQL. Τώρα γίνεται εδώ.
+  async function loadCities() {
+    const { data } = await supabase
+      .from("cities")
+      .select("*")
+      .order("display_order", { ascending: true });
+    setCities(data || []);
+  }
+
+  async function toggleCity(c) {
+    setCityBusy(true);
+    await supabase.from("cities").update({ is_active: !c.is_active }).eq("id", c.id);
+    await loadCities();
+    setCityBusy(false);
+  }
+
+  async function addCity() {
+    const code = (newCity.code || "").trim().toLowerCase().replace(/\s/g, "");
+    const nameEl = (newCity.name_el || "").trim();
+    if (!code || !nameEl) { alert("Συμπλήρωσε κωδικό και ελληνικό όνομα."); return; }
+
+    setCityBusy(true);
+    const { error } = await supabase.from("cities").insert([{
+      code,
+      name_el: nameEl,
+      name_en: (newCity.name_en || "").trim() || null,
+      is_active: false,
+      display_order: cities.length + 1,
+    }]);
+    setCityBusy(false);
+
+    if (error) {
+      alert(error.message.includes("duplicate") || error.message.includes("unique")
+        ? "Υπάρχει ήδη πόλη με αυτόν τον κωδικό."
+        : "Σφάλμα: " + error.message);
+      return;
+    }
+    setNewCity({ code: "", name_el: "", name_en: "" });
+    await loadCities();
+  }
+
   async function fetchSettings() {
     setLoading(true);
+    await loadCities();
 
     const [{ data }, { data: subs }, { data: plans }, { data: pays }] = await Promise.all([
       supabase.from("platform_settings").select("*"),
@@ -240,6 +286,7 @@ export default function SettingsPage() {
   const TABS = [
     { id: "general",       label: "Γενικές",       Icon: SlidersHorizontal },
     { id: "revenue",       label: "Έσοδα",         Icon: Repeat },
+    { id: "cities",        label: "Πόλεις",        Icon: Building2 },
     { id: "notifications", label: "Ειδοποιήσεις",  Icon: Bell },
     { id: "account",       label: "Λογαριασμός",   Icon: User },
   ];
@@ -453,6 +500,93 @@ export default function SettingsPage() {
       )}
 
       {/* ══ ΕΙΔΟΠΟΙΗΣΕΙΣ ═════════════════════════════════════════════════ */}
+      {/* ══ ΠΟΛΕΙΣ ══
+          Η πόλη είναι ΞΕΧΩΡΙΣΤΗ από τις περιοχές εξυπηρέτησης:
+            Πόλη: Αθήνα · Περιοχές: Κολωνάκι, Παγκράτι, Νέα Σμύρνη
+          Ο θεραπευτής επιλέγει πόλη στην εγγραφή. Αν είναι ενεργή μόνο μία,
+          προεπιλέγεται αυτόματα και δεν του ζητείται καν. */}
+      {activeTab === "cities" && (
+        <Section title="Πόλεις" subtitle="Σε ποιες πόλεις λειτουργεί η πλατφόρμα">
+          <Note tone="info" Icon={Info}>
+            Μόνο οι ενεργές πόλεις εμφανίζονται στην εγγραφή θεραπευτή.
+            Η απενεργοποίηση δεν επηρεάζει όσους έχουν ήδη δηλώσει την πόλη —
+            απλά δεν μπορούν να την επιλέξουν νέοι.
+          </Note>
+
+          <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 16, marginBottom: 22 }}>
+            {cities.length === 0 ? (
+              <div style={{ padding: 24, textAlign: "center", color: "#94A3B8", fontSize: 13, background: "#F8FAFC", borderRadius: 10 }}>
+                Δεν υπάρχουν πόλεις. Πρόσθεσε την πρώτη παρακάτω.
+              </div>
+            ) : cities.map((c) => (
+              <div key={c.id} style={{
+                display: "flex", alignItems: "center", gap: 12,
+                padding: "13px 16px", borderRadius: 10,
+                background: c.is_active ? "#F0FDF4" : "#F8FAFC",
+                border: `1px solid ${c.is_active ? "#BBF7D0" : "#E2E8F0"}`,
+                flexWrap: "wrap",
+              }}>
+                <Building2 size={16} color={c.is_active ? "#15803D" : "#94A3B8"} strokeWidth={2} />
+                <div style={{ flex: 1, minWidth: 140 }}>
+                  <div style={{ fontSize: 14, fontWeight: 600, color: "#0F172A" }}>
+                    {c.name_el}
+                    {c.name_en && <span style={{ fontSize: 12, color: "#94A3B8", marginLeft: 8 }}>{c.name_en}</span>}
+                  </div>
+                  <div style={{ fontSize: 11.5, color: "#94A3B8", fontFamily: "ui-monospace, monospace", marginTop: 2 }}>{c.code}</div>
+                </div>
+                <span style={{
+                  padding: "3px 11px", borderRadius: 999, fontSize: 11, fontWeight: 700,
+                  textTransform: "uppercase", letterSpacing: ".04em",
+                  background: c.is_active ? "#D1FAE5" : "#F1F5F9",
+                  color: c.is_active ? "#065F46" : "#64748B",
+                }}>
+                  {c.is_active ? "Ενεργή" : "Ανενεργή"}
+                </span>
+                <button onClick={() => toggleCity(c)} disabled={cityBusy}
+                  style={{
+                    padding: "7px 15px", borderRadius: 8,
+                    border: `1px solid ${c.is_active ? "#FECDD3" : "#BBF7D0"}`,
+                    background: "#fff", color: c.is_active ? "#BE123C" : "#15803D",
+                    fontSize: 12.5, fontWeight: 600, cursor: cityBusy ? "wait" : "pointer",
+                    fontFamily: "inherit", display: "inline-flex", alignItems: "center", gap: 5,
+                  }}>
+                  {c.is_active ? <><X size={12} strokeWidth={2.5} />Απενεργοποίηση</> : <><Check size={12} strokeWidth={3} />Ενεργοποίηση</>}
+                </button>
+              </div>
+            ))}
+          </div>
+
+          <div style={{ borderTop: "1px solid #F1F5F9", paddingTop: 20 }}>
+            <div style={{ fontSize: 13, fontWeight: 700, color: "#0F172A", marginBottom: 14 }}>Προσθήκη πόλης</div>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 14, marginBottom: 14 }}>
+              <Field label="Κωδικός" hint="Λατινικά, χωρίς κενά">
+                <Input value={newCity.code} onChange={(e) => setNewCity({ ...newCity, code: e.target.value })} placeholder="thessaloniki" />
+              </Field>
+              <Field label="Όνομα (EL)">
+                <Input value={newCity.name_el} onChange={(e) => setNewCity({ ...newCity, name_el: e.target.value })} placeholder="Θεσσαλονίκη" />
+              </Field>
+              <Field label="Όνομα (EN)">
+                <Input value={newCity.name_en} onChange={(e) => setNewCity({ ...newCity, name_en: e.target.value })} placeholder="Thessaloniki" />
+              </Field>
+            </div>
+            <button onClick={addCity} disabled={cityBusy}
+              style={{
+                padding: "10px 22px", borderRadius: 8, border: "none",
+                background: "#0F172A", color: "#fff", fontSize: 13, fontWeight: 600,
+                cursor: cityBusy ? "wait" : "pointer", fontFamily: "inherit",
+                display: "inline-flex", alignItems: "center", gap: 7,
+              }}>
+              <Plus size={14} strokeWidth={2.5} />
+              Προσθήκη
+            </button>
+            <div style={{ fontSize: 11.5, color: "#94A3B8", marginTop: 10, lineHeight: 1.55 }}>
+              Η νέα πόλη δημιουργείται ανενεργή. Ενεργοποίησέ την όταν είσαι έτοιμος να δεχτείς
+              θεραπευτές εκεί.
+            </div>
+          </div>
+        </Section>
+      )}
+
       {activeTab === "notifications" && (
         <Section title="Email Ειδοποιήσεις">
           <div style={{ maxWidth: 440 }}>
