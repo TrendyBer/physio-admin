@@ -7,13 +7,25 @@ import {
 } from "lucide-react";
 
 // ─── STATUS DEFINITIONS ──────────────────────────────────────────────────
+// ΤΙ ΕΙΝΑΙ ΑΥΤΗ Η ΣΕΛΙΔΑ ΤΩΡΑ:
+// Ο ασθενής πληρώνει τον θεραπευτή ΑΠΕΥΘΕΙΑΣ σε μετρητά. Η πλατφόρμα δεν
+// αγγίζει ποτέ αυτά τα χρήματα. Το μοναδικό έσοδο είναι το ΤΕΛΟΣ ΝΕΟΥ
+// ΑΣΘΕΝΗ, που ο θεραπευτής ΟΦΕΙΛΕΙ στην πλατφόρμα.
+//
+// Δηλαδή η ροή είναι ΑΝΤΙΣΤΡΟΦΗ από ό,τι υπέθετε η παλιά σελίδα:
+// δεν εισπράττουμε από τον ασθενή για να πληρώσουμε τον θεραπευτή —
+// χρεώνουμε τον θεραπευτή.
+//
+// Οι καταστάσεις pending_payout / paid_out ανήκουν στο παλιό μοντέλο.
+// Μένουν ΜΟΝΟ για να εμφανίζονται σωστά παλιές εγγραφές· δεν προσφέρονται
+// πλέον ως ενέργεια.
 const STATUSES = {
-  unpaid:         { label: "Απλήρωτο",        bg: "#FEF3C7", color: "#B45309" },
-  partially_paid: { label: "Μερική είσπραξη", bg: "#FEF3C7", color: "#B45309" },
-  paid:           { label: "Εισπράχθηκε",     bg: "#D1FAE5", color: "#065F46" },
-  pending_payout: { label: "Προς θεραπευτή",  bg: "#DBEAFE", color: "#1D4ED8" },
-  paid_out:       { label: "Πληρώθηκε",       bg: "#E0E7FF", color: "#4338CA" },
-  refunded:       { label: "Επιστροφή",       bg: "#FFE4E6", color: "#9F1239" },
+  unpaid:         { label: "Ανεξόφλητο",      bg: "#FEF3C7", color: "#B45309" },
+  partially_paid: { label: "Μερική εξόφληση", bg: "#FEF3C7", color: "#B45309" },
+  paid:           { label: "Εξοφλήθηκε",      bg: "#D1FAE5", color: "#065F46" },
+  pending_payout: { label: "Παλαιό: προς θεραπευτή", bg: "#F1F5F9", color: "#64748B" },
+  paid_out:       { label: "Παλαιό: πληρώθηκε",      bg: "#F1F5F9", color: "#64748B" },
+  refunded:       { label: "Ακυρώθηκε",       bg: "#FFE4E6", color: "#9F1239" },
   failed:         { label: "Απέτυχε",         bg: "#FFE4E6", color: "#9F1239" },
 };
 
@@ -86,7 +98,9 @@ function StatCard({ label, value, sub, bg, border, text, Icon }) {
 export default function PaymentsPage() {
   const [rows, setRows] = useState([]);
   const [therapists, setTherapists] = useState([]);
-  const [commission, setCommission] = useState(20);
+  // Το τέλος νέου ασθενή, όχι «προμήθεια». Έρχεται από τις ρυθμίσεις
+  // πλατφόρμας — το ίδιο κλειδί που διαβάζει και η σελίδα συνδρομών.
+  const [defaultFee, setDefaultFee] = useState(10);
   const [loading, setLoading] = useState(true);
   const [expanded, setExpanded] = useState(null);
   const [busy, setBusy] = useState(false);
@@ -105,9 +119,9 @@ export default function PaymentsPage() {
     setLoading(true);
 
     const { data: settingsData } = await supabase
-      .from("platform_settings").select("value").eq("key", "commission").maybeSingle();
-    const comm = settingsData ? parseInt(settingsData.value) || 20 : 20;
-    setCommission(comm);
+      .from("platform_settings").select("value").eq("key", "first_session_fee_default").maybeSingle();
+    const comm = settingsData ? parseFloat(settingsData.value) || 10 : 10;
+    setDefaultFee(comm);
 
     const [
       { data: payments },
@@ -117,7 +131,7 @@ export default function PaymentsPage() {
     ] = await Promise.all([
       supabase.from("payments").select("*").order("created_at", { ascending: false }),
       supabase.from("therapist_profiles").select("id, name, specialty, area, photo_url, iban"),
-      supabase.from("session_requests").select("id, patient_id, problem_type, package_size"),
+      supabase.from("session_requests").select("id, patient_id, problem_type"),
       supabase.from("patient_profiles").select("id, name"),
     ]);
 
@@ -142,7 +156,6 @@ export default function PaymentsPage() {
           therapist_iban: t?.iban || null,
           patient: p.patient_name || (req ? pMap[req.patient_id] : null) || "Άγνωστος",
           problem: req?.problem_type || "",
-          package_size: req?.package_size || "",
           age: daysSince(p.created_at),
         };
       });
@@ -216,7 +229,7 @@ export default function PaymentsPage() {
   function autoNet() {
     const pa = Number(form.patient_amount);
     const am = Number(form.amount);
-    if (!pa || !am) { alert("Συμπλήρωσε πρώτα «Ποσό ασθενή» και «Προμήθεια»."); return; }
+    if (!pa || !am) { alert("Συμπλήρωσε πρώτα «Ποσό συνεδρίας» και «Τέλος νέου ασθενή»."); return; }
     setForm({ ...form, therapist_net: Math.max(0, pa - am) });
   }
 
@@ -301,10 +314,9 @@ export default function PaymentsPage() {
         IBAN: r.therapist_iban || "",
         Ασθενής: r.patient,
         Πάθηση: r.problem,
-        Πακέτο: r.package_size,
         Ποσό_ασθενή: num(r.patient_amount) || "",
-        Προμήθεια: r.amount,
-        Καθαρό_θεραπευτή: num(r.therapist_net) || "",
+        Τέλος_νέου_ασθενή: r.amount,
+        Καθαρά_θεραπευτή_παλαιό: num(r.therapist_net) || "",
         Κατάσταση: STATUSES[r.status]?.label || r.status,
         Μέθοδος: METHODS[r.payment_method] || "",
         Επιστροφή: num(r.refund_amount) || "",
@@ -337,7 +349,7 @@ export default function PaymentsPage() {
         <div style={{ flex: 1, minWidth: 240 }}>
           <h1 style={{ fontSize: 26, fontWeight: 700, color: "#0F172A", margin: 0 }}>Πληρωμές</h1>
           <p style={{ fontSize: 13, color: "#94A3B8", marginTop: 4 }}>
-            Προμήθειες, επιστροφές και πληρωμές θεραπευτών · προεπιλογή {commission}€ ανά περιστατικό
+            Τέλη νέου ασθενή που οφείλουν οι θεραπευτές · προεπιλογή {defaultFee}€ ανά νέο ασθενή
           </p>
         </div>
         <button onClick={handleExport}
@@ -353,10 +365,10 @@ export default function PaymentsPage() {
           <AlertTriangle size={20} color="#BE123C" strokeWidth={2.2} style={{ flexShrink: 0 }} />
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ fontSize: 14, fontWeight: 700, color: "#9F1239" }}>
-              {overdueRows.length} ληξιπρόθεσμες προμήθειες ({sum(overdueRows)}€)
+              {overdueRows.length} ληξιπρόθεσμα τέλη ({sum(overdueRows)}€)
             </div>
             <div style={{ fontSize: 12, color: "#9F1239", opacity: 0.85, marginTop: 2 }}>
-              Απλήρωτες πάνω από 30 ημέρες — χρειάζονται επικοινωνία.
+              Ανεξόφλητα πάνω από 30 ημέρες — χρειάζονται επικοινωνία με τον θεραπευτή.
             </div>
           </div>
           <button onClick={() => { setStatusFilter("overdue"); setTherapistId("all"); setPeriod("all"); setSearch(""); }}
@@ -372,10 +384,11 @@ export default function PaymentsPage() {
           <Banknote size={20} color="#1D4ED8" strokeWidth={2.2} style={{ flexShrink: 0 }} />
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ fontSize: 14, fontWeight: 700, color: "#1E40AF" }}>
-              {payoutRows.length} πληρωμές εκκρεμούν προς θεραπευτές ({payoutTotal}€)
+              {payoutRows.length} παλαιές εγγραφές πληρωμής προς θεραπευτές ({payoutTotal}€)
             </div>
             <div style={{ fontSize: 12, color: "#1E40AF", opacity: 0.85, marginTop: 2 }}>
-              Η προμήθεια εισπράχθηκε — μένει να πληρωθεί ο θεραπευτής.
+              Ανήκουν στο παλιό μοντέλο, όπου η πλατφόρμα εισέπραττε από τον ασθενή.
+              Σήμερα ο ασθενής πληρώνει τον θεραπευτή απευθείας σε μετρητά.
             </div>
           </div>
           <button onClick={() => { setStatusFilter("pending_payout"); setTherapistId("all"); setPeriod("all"); setSearch(""); }}
@@ -501,7 +514,7 @@ export default function PaymentsPage() {
                       <span>Ασθενής</span>
                       <span>Ημερομηνία</span>
                       <span>Ημέρες</span>
-                      <span>Προμήθεια</span>
+                      <span>Τέλος νέου ασθενή</span>
                       <span>Κατάσταση</span>
                       <span>Ενέργειες</span>
                     </div>
@@ -525,7 +538,7 @@ export default function PaymentsPage() {
 
                         <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
                           {OPEN.includes(c.status) && (
-                            <button onClick={() => setStatus(c.id, "paid")} disabled={busy} title="Είσπραξη προμήθειας"
+                            <button onClick={() => setStatus(c.id, "paid")} disabled={busy} title="Σήμανση ως εξοφλημένο"
                               style={{ padding: "5px 10px", borderRadius: 6, border: "1px solid #BBF7D0", background: "#F0FDF4", color: "#15803D", fontSize: 11, fontWeight: 600, cursor: busy ? "not-allowed" : "pointer", fontFamily: "inherit", display: "inline-flex", alignItems: "center", gap: 4 }}>
                               <CheckCircle2 size={12} /> Είσπραξη
                             </button>
@@ -592,7 +605,6 @@ export default function PaymentsPage() {
               {detail.paid_at && <div><strong>Εισπράχθηκε:</strong> {fmtDate(detail.paid_at)}</div>}
               {detail.payout_at && <div><strong>Πληρώθηκε ο θεραπευτής:</strong> {fmtDate(detail.payout_at)}</div>}
               {detail.refunded_at && <div><strong>Επιστροφή:</strong> {fmtDate(detail.refunded_at)}</div>}
-              {detail.package_size && <div><strong>Πακέτο:</strong> {detail.package_size}</div>}
               {detail.therapist_iban && <div><strong>IBAN:</strong> {detail.therapist_iban}</div>}
             </div>
 
@@ -606,17 +618,17 @@ export default function PaymentsPage() {
 
               <div style={{ display: "flex", gap: 12 }}>
                 <div style={{ flex: 1 }}>
-                  <label style={labelStyle}>Ποσό ασθενή (€)</label>
+                  <label style={labelStyle}>Ποσό συνεδρίας (€)</label>
                   <input type="number" value={form.patient_amount} onChange={(e) => setForm({ ...form, patient_amount: e.target.value })} placeholder="π.χ. 300" style={inputStyle} />
                 </div>
                 <div style={{ flex: 1 }}>
-                  <label style={labelStyle}>Προμήθεια (€)</label>
+                  <label style={labelStyle}>Τέλος νέου ασθενή (€)</label>
                   <input type="number" value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })} style={inputStyle} />
                 </div>
               </div>
 
               <div>
-                <label style={labelStyle}>Καθαρό θεραπευτή (€)</label>
+                <label style={labelStyle}>Καθαρά θεραπευτή (€) · παλαιό πεδίο</label>
                 <div style={{ display: "flex", gap: 8 }}>
                   <input type="number" value={form.therapist_net} onChange={(e) => setForm({ ...form, therapist_net: e.target.value })} placeholder="π.χ. 100" style={inputStyle} />
                   <button onClick={autoNet}
@@ -624,7 +636,10 @@ export default function PaymentsPage() {
                     Αυτόματα
                   </button>
                 </div>
-                <div style={{ fontSize: 11, color: "#94A3B8", marginTop: 4 }}>Ποσό ασθενή μείον προμήθεια</div>
+                <div style={{ fontSize: 11, color: "#94A3B8", marginTop: 4 }}>
+                  Ανήκει στο παλιό μοντέλο. Σήμερα ο θεραπευτής εισπράττει ολόκληρο το ποσό
+                  σε μετρητά και οφείλει μόνο το τέλος νέου ασθενή.
+                </div>
               </div>
 
               <div style={{ display: "flex", gap: 12 }}>

@@ -376,6 +376,43 @@ function RequestModal({ request, therapists, adminUser, onClose, onRefresh }) {
             </button>
           </div>
 
+          {/* ── SLA ──
+              Το ρολόι ξεκινά από το notified_at, ΟΧΙ από τη δημιουργία.
+              Αν το notified_at είναι κενό, ο θεραπευτής δεν ειδοποιήθηκε ποτέ
+              και το αίτημα κάθεται αόρατο — αυτό είναι το χειρότερο σενάριο
+              και πρέπει να φαίνεται αμέσως, όχι θαμμένο σε καρτέλα. */}
+          {request.type === "booking" && request.status === "pending" && (
+            <div style={{ padding:"0 28px", flexShrink:0 }}>
+              {(() => {
+                const notified = request.notified_at;
+                const due = request.sla_due_at;
+                const overdue = due && new Date(due) < new Date();
+                const style = !notified
+                  ? { bg:"#FEF2F2", br:"#FECACA", fg:"#BE123C" }
+                  : overdue
+                    ? { bg:"#FFFBEB", br:"#FDE68A", fg:"#B45309" }
+                    : { bg:"#F0FDF4", br:"#BBF7D0", fg:"#15803D" };
+                return (
+                  <div style={{
+                    background: style.bg, border:`1px solid ${style.br}`, borderRadius:10,
+                    padding:"10px 14px", marginTop:12, fontSize:12.5, color: style.fg,
+                    display:"flex", alignItems:"flex-start", gap:8, lineHeight:1.6,
+                  }}>
+                    <AlertTriangle size={14} strokeWidth={2.2} style={{ marginTop:1, flexShrink:0 }}/>
+                    <span>
+                      {!notified
+                        ? "Ο θεραπευτής ΔΕΝ έχει ειδοποιηθεί. Το SLA ρολόι δεν έχει ξεκινήσει — το αίτημα μπορεί να μείνει αναπάντητο χωρίς να το μάθει κανείς."
+                        : overdue
+                          ? `Εκπρόθεσμο. Ειδοποιήθηκε ${fmtDateTime(notified)}, προθεσμία ${fmtDateTime(due)}.`
+                          : `Ειδοποιήθηκε ${fmtDateTime(notified)}${due ? ` · προθεσμία ${fmtDateTime(due)}` : ""}.`}
+                      {request.needs_support && <strong> · Σημειωμένο για υποστήριξη.</strong>}
+                    </span>
+                  </div>
+                );
+              })()}
+            </div>
+          )}
+
           {/* Tabs */}
           <div style={{ padding:"14px 28px 0", flexShrink:0 }}>
             <div style={{ display:"inline-flex", gap:4, background:"#E2E8F0", padding:4, borderRadius:10 }}>
@@ -911,15 +948,16 @@ export default function RequestsPage() {
       { key: "area",           label: "Περιοχή" },
       { key: "postal",         label: "ΤΚ" },
       { key: "floor",          label: "Όροφος" },
-      { key: "problem",        label: "Πάθηση" },
+      { key: "problem",        label: "Περιστατικό" },
       { key: "description",    label: "Περιγραφή" },
       { key: "therapist",      label: "Θεραπευτής" },
-      { key: "sessionType",    label: "Τύπος Συνεδρίας" },
-      { key: "packageSize",    label: "Πακέτο" },
       { key: "sessions",       label: "Αριθμός Συνεδριών" },
       { key: "patientAmount",  label: "Ποσό Ασθενή" },
       { key: "commission",     label: "Προμήθεια" },
       { key: "therapistNet",   label: "Καθαρό Θεραπευτή" },
+      { key: "notifiedAt",     label: "Ειδοποιήθηκε" },
+      { key: "slaDueAt",       label: "Προθεσμία SLA" },
+      { key: "respondedAt",    label: "Απάντησε" },
       { key: "payStatus",      label: "Κατάσταση Πληρωμής" },
       { key: "paidAt",         label: "Ημ. Είσπραξης" },
       { key: "cancelReason",   label: "Λόγος Ακύρωσης" },
@@ -941,12 +979,13 @@ export default function RequestsPage() {
       problem:       r.problem_type,
       description:   r.problem_description,
       therapist:     r.therapist_name || "Χωρίς θεραπευτή",
-      sessionType:   r.session_type === "single" ? "Μεμονωμένη" : (r.session_type || ""),
-      packageSize:   r.package_size,
       sessions:      r.bookings?.length || 0,
       patientAmount: r.payment?.patient_amount || "",
       commission:    r.payment?.amount || "",
       therapistNet:  r.payment?.therapist_net || "",
+      notifiedAt:    csvDate(r.notified_at),
+      slaDueAt:      csvDate(r.sla_due_at),
+      respondedAt:   csvDate(r.responded_at),
       payStatus:     r.payment ? (PAY_STATUS[r.payment.status]?.label || r.payment.status) : "Χωρίς εγγραφή",
       paidAt:        csvDate(r.payment?.paid_at),
       cancelReason:  r.cancelled_reason,
@@ -1065,7 +1104,7 @@ export default function RequestsPage() {
         </select>
 
         <select value={filterProblem} onChange={e=>setFilterProblem(e.target.value)} style={selectStyle}>
-          <option value="all">Όλες οι παθήσεις</option>
+          <option value="all">Όλα τα περιστατικά</option>
           {uniqueProblems.map(p => <option key={p} value={p}>{p}</option>)}
         </select>
 
@@ -1145,6 +1184,18 @@ export default function RequestsPage() {
                   {flagged && (
                     <span style={{ display:"inline-flex", alignItems:"center", gap:4, background:"#FFFBEB", color:"#B45309", border:"1px solid #FDE68A", padding:"2px 8px", borderRadius:999, fontSize:10, fontWeight:700, textTransform:"uppercase" }}>
                       <AlertTriangle size={10}/> Ενέργεια
+                    </span>
+                  )}
+                  {/* Ο θεραπευτής δεν έμαθε ποτέ ότι υπάρχει αίτημα.
+                      Χωρίς αυτό το σήμα, το αίτημα κάθεται αόρατο. */}
+                  {r.type === "booking" && r.status === "pending" && r.therapist_id && !r.notified_at && (
+                    <span style={{ display:"inline-flex", alignItems:"center", gap:4, background:"#FEF2F2", color:"#BE123C", border:"1px solid #FECACA", padding:"2px 8px", borderRadius:999, fontSize:10, fontWeight:700, textTransform:"uppercase" }}>
+                      <AlertTriangle size={10}/> Δεν ειδοποιήθηκε
+                    </span>
+                  )}
+                  {r.sla_due_at && r.status === "pending" && new Date(r.sla_due_at) < new Date() && (
+                    <span style={{ display:"inline-flex", alignItems:"center", gap:4, background:"#FFF7ED", color:"#C2410C", border:"1px solid #FED7AA", padding:"2px 8px", borderRadius:999, fontSize:10, fontWeight:700, textTransform:"uppercase" }}>
+                      <Clock size={10}/> Εκπρόθεσμο
                     </span>
                   )}
                 </div>
