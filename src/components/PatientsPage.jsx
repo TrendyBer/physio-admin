@@ -4,7 +4,7 @@ import { supabase } from "../lib/supabase";
 import {
   Search, X, Mail, Phone, MapPin, Home, Calendar, Download, Save,
   Ban, CheckCircle2, AlertTriangle, User, ClipboardList, StickyNote,
-  Tag, Clock, ShieldOff,
+  Tag, Clock, ShieldOff, Star, Euro, Trash2, Plus,
 } from "lucide-react";
 import { exportToCsv, csvDate } from "../lib/exportCsv";
 
@@ -25,6 +25,46 @@ const SUPPORT_TAGS = [
 ];
 
 const num = (v) => (v === null || v === undefined || v === "" ? 0 : Number(v));
+
+// ── ΔΥΝΑΜΙΚΑ ΠΕΔΙΑ ΕΠΙΚΟΙΝΩΝΙΑΣ ──
+// Δεν γράφουμε λίστα με σταθερά πεδία: αν αύριο προστεθεί στήλη στο
+// patient_profiles, θα εμφανιστεί εδώ ΜΟΝΗ ΤΗΣ. Αλλιώς κάθε νέο πεδίο
+// θα ήταν αόρατο στο admin μέχρι να το θυμηθεί κάποιος.
+const CONTACT_ORDER = [
+  "email", "phone", "mobile", "telephone", "phone2",
+  "emergency_contact", "emergency_phone",
+  "address", "area", "region", "city", "postal_code", "zip", "zip_code",
+  "date_of_birth", "birth_date", "gender", "notes",
+];
+
+const CONTACT_EXCLUDE = new Set([
+  "id", "user_id", "auth_id", "created_at", "updated_at",
+  "support_tags", "admin_comment", "name", "full_name",
+  "is_blocked", "blocked_reason", "photo_url", "avatar_url",
+]);
+
+const FIELD_LABELS = {
+  email: "Email", phone: "Τηλέφωνο", phone2: "Τηλέφωνο 2",
+  mobile: "Κινητό", telephone: "Τηλέφωνο",
+  emergency_contact: "Επαφή έκτακτης ανάγκης", emergency_phone: "Τηλέφωνο έκτακτης ανάγκης",
+  address: "Διεύθυνση", area: "Περιοχή", region: "Περιοχή", city: "Πόλη",
+  postal_code: "Τ.Κ.", zip: "Τ.Κ.", zip_code: "Τ.Κ.",
+  date_of_birth: "Ημ. γέννησης", birth_date: "Ημ. γέννησης",
+  gender: "Φύλο", notes: "Σημειώσεις ασθενή",
+};
+
+const cmPretty = (k) => FIELD_LABELS[k] || k.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+const cmShowable = (v) => v !== null && v !== undefined && v !== "" && typeof v !== "object" && typeof v !== "boolean";
+
+function buildContactRows(rec) {
+  if (!rec) return [];
+  const known = new Set(CONTACT_ORDER);
+  const ordered = CONTACT_ORDER.filter((k) => cmShowable(rec[k])).map((k) => [cmPretty(k), String(rec[k])]);
+  const extra = Object.keys(rec)
+    .filter((k) => !CONTACT_EXCLUDE.has(k) && !known.has(k) && cmShowable(rec[k]))
+    .map((k) => [cmPretty(k), String(rec[k])]);
+  return [...ordered, ...extra];
+}
 
 function fmtDate(d) {
   if (!d) return "—";
@@ -118,9 +158,11 @@ function Empty({ text }) {
 }
 
 // ════════════════════════════════════════════════════════════════════════
-function PatientDrawer({ patient, contact, requests, bookings, therapists, onClose, onRefresh }) {
+function PatientDrawer({ patient, contact, requests, bookings, therapists, reviews, payments, onClose, onRefresh }) {
   const [tab, setTab] = useState("overview");
   const [busy, setBusy] = useState(false);
+  const [notes, setNotes] = useState([]);
+  const [newNote, setNewNote] = useState("");
   const [comment, setComment] = useState(patient.admin_comment || "");
   const [tags, setTags] = useState(patient.support_tags || []);
   const [showBlock, setShowBlock] = useState(false);
@@ -129,7 +171,41 @@ function PatientDrawer({ patient, contact, requests, bookings, therapists, onClo
   useEffect(() => {
     setComment(patient.admin_comment || "");
     setTags(patient.support_tags || []);
+    loadNotes();
   }, [patient.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  async function loadNotes() {
+    const { data } = await supabase
+      .from("patient_notes")
+      .select("*")
+      .eq("patient_id", patient.id)
+      .order("created_at", { ascending: false });
+    setNotes(data || []);
+  }
+
+  async function addNote() {
+    if (!newNote.trim()) return;
+    setBusy(true);
+    const { data: { user } } = await supabase.auth.getUser();
+    const { error } = await supabase.from("patient_notes").insert({
+      patient_id: patient.id,
+      body: newNote.trim(),
+      author_id: user?.id || null,
+      author_email: user?.email || null,
+    });
+    setBusy(false);
+    if (error) { alert("Σφάλμα: " + error.message); return; }
+    setNewNote("");
+    await loadNotes();
+  }
+
+  async function deleteNote(id) {
+    if (!confirm("Διαγραφή σημείωσης;")) return;
+    setBusy(true);
+    await supabase.from("patient_notes").delete().eq("id", id);
+    setNotes((n) => n.filter((x) => x.id !== id));
+    setBusy(false);
+  }
 
   const therapistName = (id) => therapists.find(t => t.id === id)?.name || "—";
 
@@ -180,7 +256,9 @@ function PatientDrawer({ patient, contact, requests, bookings, therapists, onClo
   const TABS = [
     { id: "overview", label: "Στοιχεία", Icon: User },
     { id: "history",  label: `Ραντεβού (${bookings.length})`, Icon: ClipboardList },
-    { id: "notes",    label: "Σημειώσεις", Icon: StickyNote },
+    { id: "reviews",  label: `Αξιολογήσεις (${reviews.length})`, Icon: Star },
+    { id: "payments", label: `Πληρωμές (${payments.length})`, Icon: Euro },
+    { id: "notes",    label: `Σημειώσεις (${notes.length})`, Icon: StickyNote },
   ];
 
   return (
@@ -267,6 +345,17 @@ function PatientDrawer({ patient, contact, requests, bookings, therapists, onClo
 
               {/* Η διεύθυνση δεν εμφανίζεται πουθενά δημόσια.
                   Ο θεραπευτής τη βλέπει μόνο αφού αποδεχτεί το αίτημα. */}
+              {/* ΟΛΑ τα πεδία του προφίλ, ακόμα και όσα προστεθούν αργότερα */}
+              <Panel title="Όλα τα καταχωρημένα στοιχεία" Icon={ClipboardList}>
+                {buildContactRows(patient).length === 0 ? (
+                  <div style={{ fontSize: 13, color: "#94A3B8", fontStyle: "italic" }}>
+                    Δεν έχουν καταχωρηθεί επιπλέον στοιχεία.
+                  </div>
+                ) : buildContactRows(patient).map(([label, value], i, arr) => (
+                  <Row key={label + i} label={label} value={value} last={i === arr.length - 1} />
+                ))}
+              </Panel>
+
               <Panel title="Διεύθυνση" Icon={Home}>
                 {fullAddress ? (
                   <>
@@ -341,17 +430,95 @@ function PatientDrawer({ patient, contact, requests, bookings, therapists, onClo
             )
           )}
 
-          {tab === "notes" && (
-            <Panel title="Εσωτερική σημείωση" Icon={StickyNote}>
-              <textarea value={comment} onChange={e => setComment(e.target.value)} rows={6}
-                placeholder="Σημειώσεις ορατές μόνο στο admin..."
-                style={{ width: "100%", padding: "12px 14px", border: "1.5px solid #E2E8F0", borderRadius: 10, fontSize: 13.5, fontFamily: "inherit", outline: "none", resize: "vertical", color: "#0F172A", boxSizing: "border-box" }} />
-              <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 12 }}>
-                <ActionBtn onClick={saveComment} disabled={busy} bg="#0F172A" color="#fff" Icon={Save}>
-                  {busy ? "Αποθήκευση..." : "Αποθήκευση"}
-                </ActionBtn>
+          {tab === "reviews" && (
+            reviews.length === 0 ? <Empty text="Δεν έχει γράψει αξιολογήσεις" /> : (
+              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                {reviews.map((r) => (
+                  <div key={r.id} style={{ background: "#fff", border: "1px solid #E2E8F0", borderRadius: 12, padding: "14px 18px" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 9, marginBottom: 7, flexWrap: "wrap" }}>
+                      <span style={{ display: "inline-flex", gap: 2 }}>
+                        {[1, 2, 3, 4, 5].map((i) => (
+                          <Star key={i} size={13} fill={i <= (r.rating || 0) ? "#F59E0B" : "none"} color={i <= (r.rating || 0) ? "#F59E0B" : "#E2E8F0"} strokeWidth={2} />
+                        ))}
+                      </span>
+                      <span style={{ fontSize: 12.5, color: "#64748B" }}>{therapistName(r.therapist_id)}</span>
+                      {!r.is_published && <Badge label="Μη δημοσιευμένη" bg="#FFFBEB" color="#B45309" />}
+                      <span style={{ marginLeft: "auto", fontSize: 11.5, color: "#94A3B8" }}>{fmtDate(r.created_at)}</span>
+                    </div>
+                    {r.comment && (
+                      <p style={{ fontSize: 13.5, color: "#475569", margin: 0, lineHeight: 1.6, fontStyle: "italic" }}>{r.comment}</p>
+                    )}
+                  </div>
+                ))}
               </div>
-            </Panel>
+            )
+          )}
+
+          {tab === "payments" && (
+            payments.length === 0 ? <Empty text="Δεν υπάρχουν χρεώσεις" /> : (
+              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                {payments.map((p) => (
+                  <div key={p.id} style={{ background: "#fff", border: "1px solid #E2E8F0", borderRadius: 12, padding: "14px 18px", display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+                    <Euro size={16} color="#64748B" />
+                    <div style={{ flex: 1, minWidth: 120 }}>
+                      <div style={{ fontSize: 14, fontWeight: 700, color: "#0F172A" }}>{num(p.amount).toFixed(2)}€</div>
+                      <div style={{ fontSize: 12, color: "#94A3B8" }}>{fmtDate(p.created_at)}</div>
+                    </div>
+                    {p.paid || p.status === "paid"
+                      ? <Badge label="Εξοφλήθηκε" bg="#F0FDF4" color="#15803D" Icon={CheckCircle2} />
+                      : <Badge label="Ανεξόφλητο" bg="#FFFBEB" color="#B45309" Icon={Clock} />}
+                  </div>
+                ))}
+              </div>
+            )
+          )}
+
+          {tab === "notes" && (
+            <>
+              {/* ΙΣΤΟΡΙΚΟ σημειώσεων, όχι ένα κουτί που το ξαναγράφεις.
+                  Κρατάει ποιος έγραψε τι και πότε — απαραίτητο όταν
+                  περισσότεροι από ένας χειρίζονται υποστήριξη. */}
+              <Panel title="Νέα σημείωση" Icon={StickyNote}>
+                <textarea value={newNote} onChange={e => setNewNote(e.target.value)} rows={3}
+                  placeholder="Τι ειπώθηκε, τι μένει..."
+                  style={{ width: "100%", padding: "11px 13px", border: "1.5px solid #E2E8F0", borderRadius: 10, fontSize: 13.5, fontFamily: "inherit", outline: "none", resize: "vertical", color: "#0F172A", boxSizing: "border-box" }} />
+                <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 10 }}>
+                  <ActionBtn onClick={addNote} disabled={busy || !newNote.trim()} bg="#0F172A" color="#fff" Icon={Plus}>
+                    Προσθήκη
+                  </ActionBtn>
+                </div>
+              </Panel>
+
+              {notes.length > 0 && (
+                <div style={{ display: "flex", flexDirection: "column", gap: 9, marginBottom: 14 }}>
+                  {notes.map((n) => (
+                    <div key={n.id} style={{ background: "#fff", border: "1px solid #E2E8F0", borderRadius: 12, padding: "13px 17px" }}>
+                      <p style={{ fontSize: 13.5, color: "#334155", margin: 0, lineHeight: 1.6, whiteSpace: "pre-line" }}>{n.body}</p>
+                      <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 8 }}>
+                        <span style={{ fontSize: 11, color: "#94A3B8" }}>
+                          {fmtDateTime(n.created_at)}{n.author_email ? ` · ${n.author_email}` : ""}
+                        </span>
+                        <button onClick={() => deleteNote(n.id)} disabled={busy}
+                          style={{ marginLeft: "auto", background: "transparent", border: "none", color: "#BE123C", cursor: "pointer", padding: 2, display: "flex" }}>
+                          <Trash2 size={13} />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              <Panel title="Γενικό σχόλιο" Icon={StickyNote}>
+                <textarea value={comment} onChange={e => setComment(e.target.value)} rows={4}
+                  placeholder="Μόνιμο σχόλιο για τον ασθενή..."
+                  style={{ width: "100%", padding: "12px 14px", border: "1.5px solid #E2E8F0", borderRadius: 10, fontSize: 13.5, fontFamily: "inherit", outline: "none", resize: "vertical", color: "#0F172A", boxSizing: "border-box" }} />
+                <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 12 }}>
+                  <ActionBtn onClick={saveComment} disabled={busy} bg="#0F172A" color="#fff" Icon={Save}>
+                    {busy ? "Αποθήκευση..." : "Αποθήκευση"}
+                  </ActionBtn>
+                </div>
+              </Panel>
+            </>
           )}
         </div>
 
@@ -395,6 +562,8 @@ export default function PatientsPage({ hideHeader }) {
   const [bookingsByPatient, setBookingsByPatient] = useState({});
   const [requestsByPatient, setRequestsByPatient] = useState({});
   const [therapists, setTherapists] = useState([]);
+  const [reviewsByPatient, setReviewsByPatient] = useState({});
+  const [paymentsByPatient, setPaymentsByPatient] = useState({});
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState(null);
   const [search, setSearch] = useState("");
@@ -406,11 +575,13 @@ export default function PatientsPage({ hideHeader }) {
   async function fetchAll() {
     setLoading(true);
 
-    const [{ data: pts }, { data: bks }, { data: reqs }, { data: ths }] = await Promise.all([
+    const [{ data: pts }, { data: bks }, { data: reqs }, { data: ths }, { data: rvs }, { data: pays }] = await Promise.all([
       supabase.from("patient_profiles").select("*").order("created_at", { ascending: false }),
       supabase.from("session_bookings").select("*").order("session_date", { ascending: false }),
       supabase.from("session_requests").select("id, patient_id, problem_type, area, status, created_at"),
       supabase.from("therapist_profiles").select("id, name"),
+      supabase.from("reviews").select("*").order("created_at", { ascending: false }),
+      supabase.from("payments").select("*").order("created_at", { ascending: false }),
     ]);
 
     const list = pts || [];
@@ -432,6 +603,24 @@ export default function PatientsPage({ hideHeader }) {
       bkMap[b.patient_id].push({ ...b, request: reqById[b.request_id] || null });
     });
 
+    // Αξιολογήσεις και χρεώσεις ανά ασθενή
+    const rvMap = {};
+    (rvs || []).forEach((r) => {
+      if (!r.patient_id) return;
+      if (!rvMap[r.patient_id]) rvMap[r.patient_id] = [];
+      rvMap[r.patient_id].push(r);
+    });
+
+    const payMap = {};
+    (pays || []).forEach((p) => {
+      const pid = p.patient_id || (reqById[p.request_id]?.patient_id);
+      if (!pid) return;
+      if (!payMap[pid]) payMap[pid] = [];
+      payMap[pid].push(p);
+    });
+
+    setReviewsByPatient(rvMap);
+    setPaymentsByPatient(payMap);
     setPatients(list);
     setBookingsByPatient(bkMap);
     setRequestsByPatient(reqMap);
@@ -623,6 +812,8 @@ export default function PatientsPage({ hideHeader }) {
           requests={requestsByPatient[selected.id] || []}
           bookings={bookingsByPatient[selected.id] || []}
           therapists={therapists}
+          reviews={reviewsByPatient[selected.id] || []}
+          payments={paymentsByPatient[selected.id] || []}
           onClose={() => setSelected(null)}
           onRefresh={fetchAll}
         />
