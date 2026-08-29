@@ -4,7 +4,7 @@ import { supabase } from "../lib/supabase";
 import {
   LayoutDashboard, ListChecks, ClipboardList, CreditCard, Users,
   Star, FileText, Heart, FolderTree, Settings, LogOut, Lock,
-  Repeat, Tag,
+  Repeat, Tag, Inbox,
 } from "lucide-react";
 
 import AdminDashboard from "./AdminDashboard";
@@ -19,6 +19,7 @@ import BlogPage from "./BlogPage";
 import CMSPage from "./CMSPage";
 import SubscriptionsPage from "./SubscriptionsPage";
 import PromoCodesPage from "./PromoCodesPage";
+import LeadsPage from "./LeadsPage";
 
 // ─── NAV STRUCTURE ──────────────────────────────────────────────────────
 // ΑΦΑΙΡΕΘΗΚΕ: «Πακέτα» (PackagesPage).
@@ -39,6 +40,7 @@ const NAV_SECTIONS = [
     section: "Λειτουργία",
     items: [
       { id: "requests",  label: "Αιτήματα",  Icon: ClipboardList },
+      { id: "leads",     label: "Leads",     Icon: Inbox },
       { id: "payments",  label: "Πληρωμές",  Icon: CreditCard },
     ],
   },
@@ -211,12 +213,14 @@ export default function AdminLayout() {
         { data: reviews },
         { data: bookings },
         { data: paymentsData },
+        { data: leadsData },
       ] = await Promise.all([
         supabase.from("session_requests").select("id, status, therapist_id, type"),
         supabase.from("therapist_profiles").select("id, is_approved, application_status, license_url, license_verified"),
         supabase.from("reviews").select("id, rating, is_published"),
         supabase.from("session_bookings").select("request_id"),
         supabase.from("payments").select("id, paid"),
+        supabase.from("leads").select("id, status, created_at"),
       ]);
 
       const bookedIds = new Set((bookings || []).map(b => b.request_id));
@@ -241,7 +245,13 @@ export default function AdminLayout() {
         r => r.status === "confirmed" && !bookedIds.has(r.id)
       ).length;
 
-      setTaskCount(unassigned + pendingLicences + unpaid + badReviews + confirmedNoSessions + pendingReviews);
+      // Leads που περιμένουν πάνω από 24 ώρες — η σελίδα υπόσχεται
+      // επικοινωνία εντός 24 ωρών, οπότε είναι πραγματική εκκρεμότητα.
+      const staleLeads = (leadsData || []).filter(
+        l => l.status === "new" && (Date.now() - new Date(l.created_at).getTime()) >= 86400000
+      ).length;
+
+      setTaskCount(unassigned + pendingLicences + unpaid + badReviews + confirmedNoSessions + pendingReviews + staleLeads);
     } catch (_) {
       setTaskCount(0);
     }
@@ -260,6 +270,7 @@ export default function AdminLayout() {
       case "users":         return <UsersPage />;
       case "therapists":    return <UsersPage />;
       case "requests":      return <RequestsPage />;
+      case "leads":         return <LeadsPage />;
       case "subscriptions": return <SubscriptionsPage />;
       case "promos":        return <PromoCodesPage />;
       case "payments":      return <PaymentsPage />;
