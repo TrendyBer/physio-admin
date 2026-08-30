@@ -4,7 +4,7 @@ import { supabase } from "../lib/supabase";
 import {
   LayoutDashboard, ListChecks, ClipboardList, CreditCard, Users,
   Star, FileText, Heart, FolderTree, Settings, LogOut, Lock,
-  Repeat, Tag, Inbox, ShieldAlert,
+  Repeat, Tag, Inbox, ShieldAlert, Globe,
 } from "lucide-react";
 
 import AdminDashboard from "./AdminDashboard";
@@ -21,6 +21,7 @@ import SubscriptionsPage from "./SubscriptionsPage";
 import PromoCodesPage from "./PromoCodesPage";
 import LeadsPage from "./LeadsPage";
 import ReportsIssuesPage from "./ReportsIssuesPage";
+import SeoPagesPage from "./SeoPagesPage";
 
 // ─── NAV STRUCTURE ──────────────────────────────────────────────────────
 // ΑΦΑΙΡΕΘΗΚΕ: «Πακέτα» (PackagesPage).
@@ -57,6 +58,7 @@ const NAV_SECTIONS = [
     items: [
       { id: "reviews",  label: "Αξιολογήσεις", Icon: Star },
       { id: "blog",     label: "Άρθρα Blog",   Icon: FileText },
+      { id: "seo",      label: "SEO σελίδες",  Icon: Globe },
       { id: "cms",      label: "Περιστατικά",  Icon: Heart },
     ],
   },
@@ -290,6 +292,7 @@ export default function AdminLayout() {
       case "categories":    return <CategoriesPage />;
       case "settings":      return <SettingsPage />;
       case "blog":          return <BlogPage />;
+      case "seo":           return <SeoPagesPage />;
       case "cms":           return <CMSPage />;
       default:              return <AdminDashboard onNavigate={setActivePage} />;
     }
