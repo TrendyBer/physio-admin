@@ -5,7 +5,7 @@ import {
   AlertTriangle, Calendar, ClipboardList, Users, Stethoscope, Euro,
   Star, ArrowRight, RefreshCw, CheckCircle2, Clock, TrendingUp,
   UserPlus, Activity, Plus, Ban, CircleCheck, MessageSquare, MapPin,
-  XCircle, Percent,
+  XCircle, Percent, Megaphone,
 } from "lucide-react";
 
 const STATUS_MAP = {
@@ -294,6 +294,32 @@ export default function AdminDashboard({ onNavigate }) {
 
   const maxAreaCount = topAreas.length ? topAreas[0].count : 1;
 
+  // ── ΑΠΟΔΟΣΗ ΑΝΑ ΠΗΓΗ ──
+  // Χωρίς αυτό, το funnel δείχνει ΠΟΣΟΙ μετατρέπονται αλλά όχι ΑΠΟ ΠΟΥ
+  // ήρθαν. Με τρεις καμπάνιες ταυτόχρονα, δεν ξέρεις ποια να κόψεις.
+  //
+  // Τα utm_* γράφονται από το new-request τη στιγμή της υποβολής, οπότε
+  // η πηγή μένει δεμένη με το αίτημα ακόμα κι αν ο επισκέπτης
+  // περιηγήθηκε σε πέντε σελίδες πρώτα.
+  const bySource = {};
+  requests.filter(r => r.type === "booking").forEach(r => {
+    const key = r.utm_source || "organic";
+    if (!bySource[key]) {
+      bySource[key] = { source: key, total: 0, confirmed: 0, completed: 0, campaigns: new Set() };
+    }
+    const b = bySource[key];
+    b.total += 1;
+    if (["confirmed", "accepted", "completed"].includes(r.status)) b.confirmed += 1;
+    if (r.status === "completed") b.completed += 1;
+    if (r.utm_campaign) b.campaigns.add(r.utm_campaign);
+  });
+
+  const sources = Object.values(bySource)
+    .map(b => ({ ...b, campaigns: [...b.campaigns], rate: pct(b.confirmed, b.total) }))
+    .sort((a, b) => b.total - a.total);
+
+  const hasPaidTraffic = sources.some(s => s.source !== "organic");
+
   const KPIS = [
     { label:"Νέα αιτήματα (7 ημέρες)", value:newRequestsWeek, Icon:ClipboardList, color:"#1D4ED8", bg:"#EFF6FF", border:"#BFDBFE", page:"requests" },
     { label:"Ενεργοί θεραπευτές",       value:approvedTherapists, Icon:Stethoscope, color:"#7E22CE", bg:"#FAF5FF", border:"#E9D5FF", page:"therapists" },
@@ -500,6 +526,57 @@ export default function AdminDashboard({ onNavigate }) {
             </>
           )}
         </div>
+
+        {/* ΑΠΟΔΟΣΗ ΑΝΑ ΠΗΓΗ.
+            Εμφανίζεται μόνο όταν υπάρχει πληρωμένη κίνηση — με μόνο
+            organic θα ήταν μία γραμμή που δεν λέει τίποτα. */}
+        {hasPaidTraffic && (
+          <div style={{ background:"#fff", border:"1px solid #E2E8F0", borderRadius:14, padding:"18px 20px" }}>
+            <div style={{ display:"flex", alignItems:"center", gap:9, marginBottom:6 }}>
+              <Megaphone size={17} color="#1D4ED8" strokeWidth={2.2}/>
+              <span style={{ fontSize:14, fontWeight:700, color:"#0F172A" }}>Απόδοση ανά πηγή</span>
+            </div>
+            <div style={{ fontSize:12, color:"#94A3B8", marginBottom:16 }}>
+              Από τα δεδομένα της βάσης — ανεξάρτητα από το Analytics
+            </div>
+
+            <div style={{ overflowX:"auto" }}>
+              <table style={{ width:"100%", borderCollapse:"collapse", minWidth:460 }}>
+                <thead>
+                  <tr style={{ background:"#F8FAFC" }}>
+                    <th style={{ padding:"9px 12px", textAlign:"left", fontSize:11, fontWeight:700, color:"#64748B", textTransform:"uppercase", letterSpacing:".05em" }}>Πηγή</th>
+                    <th style={{ padding:"9px 12px", textAlign:"right", fontSize:11, fontWeight:700, color:"#64748B", textTransform:"uppercase", letterSpacing:".05em" }}>Αιτήματα</th>
+                    <th style={{ padding:"9px 12px", textAlign:"right", fontSize:11, fontWeight:700, color:"#64748B", textTransform:"uppercase", letterSpacing:".05em" }}>Επιβεβ.</th>
+                    <th style={{ padding:"9px 12px", textAlign:"right", fontSize:11, fontWeight:700, color:"#64748B", textTransform:"uppercase", letterSpacing:".05em" }}>Ολοκλ.</th>
+                    <th style={{ padding:"9px 12px", textAlign:"right", fontSize:11, fontWeight:700, color:"#64748B", textTransform:"uppercase", letterSpacing:".05em" }}>Μετατροπή</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {sources.map(src => (
+                    <tr key={src.source} style={{ borderBottom:"1px solid #F1F5F9" }}>
+                      <td style={{ padding:"11px 12px", fontSize:13.5, fontWeight:600, color:"#0F172A" }}>
+                        {src.source === "organic" ? "Οργανικά" : src.source}
+                        {src.campaigns.length > 0 && (
+                          <div style={{ fontSize:11.5, color:"#94A3B8", fontWeight:400, marginTop:2 }}>
+                            {src.campaigns.slice(0, 2).join(" · ")}
+                            {src.campaigns.length > 2 ? ` +${src.campaigns.length - 2}` : ""}
+                          </div>
+                        )}
+                      </td>
+                      <td style={{ padding:"11px 12px", textAlign:"right", fontSize:13 }}>{src.total}</td>
+                      <td style={{ padding:"11px 12px", textAlign:"right", fontSize:13, color:"#0891B2", fontWeight:600 }}>{src.confirmed}</td>
+                      <td style={{ padding:"11px 12px", textAlign:"right", fontSize:13, color:"#15803D", fontWeight:600 }}>{src.completed}</td>
+                      <td style={{ padding:"11px 12px", textAlign:"right", fontSize:13, fontWeight:700,
+                                   color: src.rate >= 50 ? "#15803D" : src.rate >= 25 ? "#B45309" : "#BE123C" }}>
+                        {src.rate}%
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
 
         {/* Ζήτηση ανά περιοχή */}
         <div style={{ background:"#fff", border:"1px solid #E2E8F0", borderRadius:14, padding:"18px 20px" }}>

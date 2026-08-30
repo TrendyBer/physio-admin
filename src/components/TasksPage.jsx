@@ -4,11 +4,18 @@ import { supabase } from "../lib/supabase";
 import {
   AlertTriangle, UserX, UserCheck, CreditCard, Star, CalendarX,
   FileWarning, CheckCircle2, ArrowRight, RefreshCw, Banknote, ShieldAlert,
-  UserPlus, EyeOff,
+  UserPlus, EyeOff, MessageSquare, Inbox, BellOff, Phone,
 } from "lucide-react";
 
 // Καταστάσεις πληρωμής που θεωρούνται "εισπραγμένες"
 const COLLECTED = ["paid", "pending_payout", "paid_out"];
+
+const CATEGORY_LABEL = {
+  no_show: "Δεν εμφανίστηκε", late: "Καθυστέρηση", behaviour: "Συμπεριφορά",
+  quality: "Ποιότητα", payment: "Πληρωμή", safety: "Ασφάλεια",
+  wrong_address: "Λάθος διεύθυνση", other: "Άλλο",
+};
+
 const isCancelled = (s) => (s || "").startsWith("cancelled");
 
 // ─── ΤΑ 9 ΥΠΟΧΡΕΩΤΙΚΑ ΤΗΣ ΒΑΣΗΣ ─────────────────────────────────────────
@@ -39,6 +46,48 @@ function isPubliclyVisible(t) {
 
 // ─── ΟΡΙΣΜΟΙ TASK GROUPS ────────────────────────────────────────────────
 const GROUPS = [
+  {
+    // ΠΡΩΤΟ ΣΤΗ ΛΙΣΤΑ.
+    // Ένα θέμα ασφάλειας δεν περιμένει πίσω από ημιτελείς εγγραφές.
+    id: "urgent_issues",
+    label: "Επείγουσες αναφορές",
+    hint: "Θέματα ασφάλειας που δήλωσαν χρήστες — χρειάζονται άμεση επικοινωνία",
+    Icon: ShieldAlert,
+    color: "#BE123C", bg: "#FEF2F2", border: "#FECACA",
+    goTo: "reports",
+  },
+  {
+    id: "disputed_noshows",
+    label: "Αμφισβητήσεις no-show",
+    hint: "Κάποιος διαφώνησε με δήλωση no-show — το strike είναι παγωμένο μέχρι να αποφασίσεις",
+    Icon: MessageSquare,
+    color: "#C2410C", bg: "#FFF7ED", border: "#FED7AA",
+    goTo: "reports",
+  },
+  {
+    id: "open_issues",
+    label: "Ανοιχτές αναφορές",
+    hint: "Προβλήματα που δηλώθηκαν και δεν έχουν εξεταστεί",
+    Icon: AlertTriangle,
+    color: "#B45309", bg: "#FFFBEB", border: "#FDE68A",
+    goTo: "reports",
+  },
+  {
+    id: "stale_leads",
+    label: "Leads σε αναμονή",
+    hint: "Άφησαν στοιχεία πάνω από 24 ώρες πριν — η σελίδα υπόσχεται επικοινωνία εντός 24 ωρών",
+    Icon: Inbox,
+    color: "#1D4ED8", bg: "#EFF6FF", border: "#BFDBFE",
+    goTo: "leads",
+  },
+  {
+    id: "not_notified",
+    label: "Αιτήματα χωρίς ειδοποίηση",
+    hint: "Ο θεραπευτής δεν ειδοποιήθηκε ποτέ — το SLA δεν τρέχει και ο ασθενής περιμένει αόρατος",
+    Icon: BellOff,
+    color: "#9F1239", bg: "#FEF2F2", border: "#FECACA",
+    goTo: "requests",
+  },
   {
     id: "unassigned",
     label: "Αιτήματα χωρίς θεραπευτή",
@@ -157,6 +206,11 @@ function daysAgo(d) {
 export default function TasksPage({ onNavigate }) {
   const [loading, setLoading] = useState(true);
   const [data, setData] = useState({
+    urgent_issues: [],
+    disputed_noshows: [],
+    open_issues: [],
+    stale_leads: [],
+    not_notified: [],
     unassigned: [],
     incomplete_signup: [],
     pending_therapists: [],
@@ -184,6 +238,9 @@ export default function TasksPage({ onNavigate }) {
       { data: reviews },
       { data: payments },
       { data: condLinks },
+      { data: issues },
+      { data: noShows },
+      { data: leads },
     ] = await Promise.all([
       supabase.from("session_requests").select("*").order("created_at", { ascending: false }),
       supabase.from("therapist_profiles").select("*").order("created_at", { ascending: false }),
@@ -194,6 +251,9 @@ export default function TasksPage({ onNavigate }) {
       // Οι παθήσεις είναι ΥΠΟΧΡΕΩΤΙΚΟ πεδίο (3+) — χωρίς αυτές
       // το admin θα έδειχνε λάθος εικόνα πληρότητας.
       supabase.from("therapist_conditions").select("therapist_id, condition_id"),
+      supabase.from("issue_reports").select("*").order("created_at", { ascending: false }),
+      supabase.from("no_shows").select("*").order("created_at", { ascending: false }),
+      supabase.from("leads").select("id, name, phone, email, city, service, status, created_at"),
     ]);
 
     const patientMap = {};
@@ -297,7 +357,38 @@ export default function TasksPage({ onNavigate }) {
       t => t.missingList.length > 0 && !!t.license_url
     );
 
+    // ── ΝΕΕΣ ΚΑΤΗΓΟΡΙΕΣ ──
+    const openStates = ["open", "in_review"];
+
+    const urgent_issues = (issues || [])
+      .filter(i => i.severity === "urgent" && openStates.includes(i.status))
+      .map(i => ({ ...i, who: patientMap[i.reported_by] || therapistMap[i.reported_by]?.name || "Χρήστης", age: daysAgo(i.created_at) }));
+
+    const open_issues = (issues || [])
+      .filter(i => i.severity !== "urgent" && openStates.includes(i.status))
+      .map(i => ({ ...i, who: patientMap[i.reported_by] || therapistMap[i.reported_by]?.name || "Χρήστης", age: daysAgo(i.created_at) }));
+
+    // Το strike μένει ΠΑΓΩΜΕΝΟ όσο εκκρεμεί η αμφισβήτηση.
+    // Αν ξεχαστεί, ο θεραπευτής δεν τιμωρείται και δεν αθωώνεται.
+    const disputed_noshows = (noShows || [])
+      .filter(n => n.status === "disputed")
+      .map(n => ({ ...n, who: patientMap[n.absent_user_id] || therapistMap[n.absent_user_id]?.name || "Χρήστης", age: daysAgo(n.disputed_at || n.created_at) }));
+
+    const DAY = 86400000;
+    const stale_leads = (leads || [])
+      .filter(l => l.status === "new" && (Date.now() - new Date(l.created_at).getTime()) >= DAY)
+      .map(l => ({ ...l, age: daysAgo(l.created_at) }));
+
+    // Ο ΧΕΙΡΟΤΕΡΟΣ τύπος εκκρεμότητας: ο ασθενής περιμένει και κανείς
+    // δεν το ξέρει, γιατί ο θεραπευτής δεν έμαθε ποτέ ότι υπάρχει αίτημα.
+    const not_notified = enrichedReqs
+      .filter(r => r.status === "pending" && r.type === "booking"
+                && r.therapist_id && !r.notified_at
+                && (Date.now() - new Date(r.created_at).getTime()) >= 2 * 3600000)
+      .map(r => ({ ...r, age: daysAgo(r.created_at) }));
+
     setData({
+      urgent_issues, disputed_noshows, open_issues, stale_leads, not_notified,
       unassigned, incomplete_signup, pending_therapists,
       unverified_license, approved_but_hidden,
       overdue, unpaid, pending_payout,
@@ -311,6 +402,68 @@ export default function TasksPage({ onNavigate }) {
   // ─── RENDER ROWS ──────────────────────────────────────────────────────
   function renderRows(groupId) {
     const items = data[groupId] || [];
+
+    // ── Αναφορές & αμφισβητήσεις ──
+    if (["urgent_issues", "open_issues", "disputed_noshows"].includes(groupId)) {
+      const isDispute = groupId === "disputed_noshows";
+      return items.map(it => (
+        <div key={it.id} style={rowStyle}>
+          <div style={{ flex: 1, minWidth: 200 }}>
+            <div style={{ fontSize: 13.5, fontWeight: 600, color: "#0F172A" }}>
+              {isDispute
+                ? <>{it.who} <span style={{ fontWeight: 400, color: "#64748B" }}>αμφισβητεί no-show</span></>
+                : (CATEGORY_LABEL[it.category] || it.category)}
+            </div>
+            <div style={{ fontSize: 12.5, color: "#64748B", marginTop: 3 }}>
+              {isDispute
+                ? (it.dispute_note || "—").slice(0, 120)
+                : <>{it.who} · {(it.description || "").slice(0, 110)}</>}
+            </div>
+          </div>
+          <span style={{ fontSize: 12, color: it.age >= 2 ? "#BE123C" : "#94A3B8", whiteSpace: "nowrap", fontWeight: it.age >= 2 ? 600 : 400 }}>
+            {it.age === 0 ? "σήμερα" : `${it.age} ${it.age === 1 ? "μέρα" : "μέρες"}`}
+          </span>
+        </div>
+      ));
+    }
+
+    // ── Leads ──
+    if (groupId === "stale_leads") {
+      return items.map(l => (
+        <div key={l.id} style={rowStyle}>
+          <div style={{ flex: 1, minWidth: 200 }}>
+            <div style={{ fontSize: 13.5, fontWeight: 600, color: "#0F172A" }}>{l.name}</div>
+            <div style={{ fontSize: 12.5, color: "#64748B", marginTop: 3, display: "inline-flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+              <Phone size={12} />{l.phone}
+              {l.city && <>· {l.city}</>}
+              {l.service && <>· {l.service}</>}
+            </div>
+          </div>
+          <span style={{ fontSize: 12, color: "#BE123C", fontWeight: 600, whiteSpace: "nowrap" }}>
+            {l.age} {l.age === 1 ? "μέρα" : "μέρες"}
+          </span>
+        </div>
+      ));
+    }
+
+    // ── Αιτήματα χωρίς ειδοποίηση ──
+    if (groupId === "not_notified") {
+      return items.map(r => (
+        <div key={r.id} style={rowStyle}>
+          <div style={{ flex: 1, minWidth: 200 }}>
+            <div style={{ fontSize: 13.5, fontWeight: 600, color: "#0F172A" }}>
+              {r.patient_name} → {r.therapist_name || "—"}
+            </div>
+            <div style={{ fontSize: 12.5, color: "#64748B", marginTop: 3 }}>
+              {r.problem_type || "Φυσιοθεραπεία"} · {r.area || "—"}
+            </div>
+          </div>
+          <span style={{ fontSize: 12, color: "#BE123C", fontWeight: 600, whiteSpace: "nowrap" }}>
+            {r.age === 0 ? "σήμερα" : `${r.age} ${r.age === 1 ? "μέρα" : "μέρες"}`}
+          </span>
+        </div>
+      ));
+    }
 
     // Αιτήματα
     if (groupId === "unassigned" || groupId === "confirmed_no_sessions") {
