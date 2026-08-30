@@ -4,7 +4,7 @@ import { supabase } from "../lib/supabase";
 import {
   LayoutDashboard, ListChecks, ClipboardList, CreditCard, Users,
   Star, FileText, Heart, FolderTree, Settings, LogOut, Lock,
-  Repeat, Tag, Inbox,
+  Repeat, Tag, Inbox, ShieldAlert,
 } from "lucide-react";
 
 import AdminDashboard from "./AdminDashboard";
@@ -20,6 +20,7 @@ import CMSPage from "./CMSPage";
 import SubscriptionsPage from "./SubscriptionsPage";
 import PromoCodesPage from "./PromoCodesPage";
 import LeadsPage from "./LeadsPage";
+import ReportsIssuesPage from "./ReportsIssuesPage";
 
 // ─── NAV STRUCTURE ──────────────────────────────────────────────────────
 // ΑΦΑΙΡΕΘΗΚΕ: «Πακέτα» (PackagesPage).
@@ -41,6 +42,7 @@ const NAV_SECTIONS = [
     items: [
       { id: "requests",  label: "Αιτήματα",  Icon: ClipboardList },
       { id: "leads",     label: "Leads",     Icon: Inbox },
+      { id: "reports",   label: "Αναφορές",  Icon: ShieldAlert },
       { id: "payments",  label: "Πληρωμές",  Icon: CreditCard },
     ],
   },
@@ -214,6 +216,8 @@ export default function AdminLayout() {
         { data: bookings },
         { data: paymentsData },
         { data: leadsData },
+        { data: issuesData },
+        { data: noShowData },
       ] = await Promise.all([
         supabase.from("session_requests").select("id, status, therapist_id, type"),
         supabase.from("therapist_profiles").select("id, is_approved, application_status, license_url, license_verified"),
@@ -221,6 +225,8 @@ export default function AdminLayout() {
         supabase.from("session_bookings").select("request_id"),
         supabase.from("payments").select("id, paid"),
         supabase.from("leads").select("id, status, created_at"),
+        supabase.from("issue_reports").select("id, status, severity"),
+        supabase.from("no_shows").select("id, status"),
       ]);
 
       const bookedIds = new Set((bookings || []).map(b => b.request_id));
@@ -251,7 +257,12 @@ export default function AdminLayout() {
         l => l.status === "new" && (Date.now() - new Date(l.created_at).getTime()) >= 86400000
       ).length;
 
-      setTaskCount(unassigned + pendingLicences + unpaid + badReviews + confirmedNoSessions + pendingReviews + staleLeads);
+      // Ανοιχτές αναφορές και αμφισβητήσεις no-show. Οι δεύτερες
+      // παγώνουν strike μέχρι να αποφασίσει ο admin — δεν πρέπει να μένουν.
+      const openIssues = (issuesData || []).filter(i => ["open", "in_review"].includes(i.status)).length;
+      const disputes   = (noShowData || []).filter(n => n.status === "disputed").length;
+
+      setTaskCount(unassigned + pendingLicences + unpaid + badReviews + confirmedNoSessions + pendingReviews + staleLeads + openIssues + disputes);
     } catch (_) {
       setTaskCount(0);
     }
@@ -271,6 +282,7 @@ export default function AdminLayout() {
       case "therapists":    return <UsersPage />;
       case "requests":      return <RequestsPage />;
       case "leads":         return <LeadsPage />;
+      case "reports":       return <ReportsIssuesPage />;
       case "subscriptions": return <SubscriptionsPage />;
       case "promos":        return <PromoCodesPage />;
       case "payments":      return <PaymentsPage />;
