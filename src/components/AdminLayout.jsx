@@ -84,11 +84,15 @@ function Sidebar({ activePage, onNavigate, adminEmail, onLogout, taskCount }) {
       flexShrink: 0,
     }}>
       <div style={{ padding: "26px 22px 18px", borderBottom: "1px solid rgba(255,255,255,0.07)" }}>
-        <div style={{ fontSize: 18, fontWeight: 700, color: "#F1F5F9", letterSpacing: "-0.02em", display: "flex", alignItems: "center", gap: 8 }}>
-          <span style={{ width: 8, height: 8, borderRadius: "50%", background: "#38BDF8", display: "inline-block" }} />
-          Physio<span style={{ color: "#38BDF8" }}>Admin</span>
+        <div style={{ fontSize: 18, fontWeight: 700, color: "#F1F5F9", letterSpacing: "-0.02em", display: "flex", alignItems: "center", gap: 9 }}>
+          <svg width="22" height="22" viewBox="0 0 40 40" fill="none" aria-hidden="true" style={{ flexShrink: 0 }}>
+            <path d="M5 34 A 27 27 0 0 1 34 7" stroke="rgba(56,189,248,0.4)" strokeWidth="4.6" strokeLinecap="round" />
+            <path d="M5 34 A 19 19 0 0 1 24 15" stroke="#38BDF8" strokeWidth="5.2" strokeLinecap="round" />
+            <circle cx="33" cy="8" r="4.6" fill="#38BDF8" />
+          </svg>
+          Theralivo<span style={{ color: "#38BDF8", marginLeft: 6 }}>Admin</span>
         </div>
-        <div style={{ fontSize: 11, color: "#475569", marginTop: 4 }}>Marketplace Panel</div>
+        <div style={{ fontSize: 11, color: "#475569", marginTop: 5 }}>Marketplace Panel</div>
       </div>
 
       <nav style={{ padding: "12px 12px", flex: 1, overflowY: "auto" }}>

@@ -17,8 +17,17 @@
 /.next/
 /out/
 
-# production
-/build
+# Electron build output
+#
+# Το electron-builder γράφει εδώ το «Theralivo Admin.exe», 188 MB.
+# Χωρίς αυτή τη γραμμή μπαίνει στο git και το push πεθαίνει με 408.
+/dist
+
+# ΣΗΜΕΙΩΣΗ: εδώ υπήρχε «/build».
+# Ήταν για την έξοδο του Next, αλλά το Next γράφει στο /.next που
+# αγνοείται ήδη παραπάνω — άρα δεν έκανε τίποτα χρήσιμο.
+# Έκανε όμως κάτι κακό: μπλόκαρε τον φάκελο build/ όπου ζει το
+# app-icon.ico, οπότε το εικονίδιο δεν έφτανε ποτέ στο repo.
 
 # misc
 .DS_Store
@@ -40,6 +49,5 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
-physiohome-admin-desktop/
-
+# Παλιά εκδοχή της desktop εφαρμογής, πριν τη μετονομασία
 physiohome-admin-desktop/

@@ -1,12 +1,14 @@
 {
-  "name": "physio-admin",
+  "name": "theralivo-admin",
   "version": "0.1.0",
   "private": true,
   "scripts": {
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "electron": "electron .",
+    "dist": "electron-builder"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.102.1",
@@ -20,6 +22,27 @@
     "@tailwindcss/postcss": "^4",
     "eslint": "^9",
     "eslint-config-next": "16.2.1",
-    "tailwindcss": "^4"
+    "tailwindcss": "^4",
+    "electron": "^33.0.0",
+    "electron-builder": "^25.0.0"
+  },
+  "productName": "Theralivo Admin",
+  "description": "Theralivo — πίνακας διαχείρισης",
+  "main": "main.js",
+  "build": {
+    "appId": "gr.theralivo.admin",
+    "productName": "Theralivo Admin",
+    "files": [
+      "main.js",
+      "build/**"
+    ],
+    "win": {
+      "icon": "build/app-icon.ico",
+      "target": "nsis"
+    },
+    "nsis": {
+      "oneClick": false,
+      "shortcutName": "Theralivo Admin"
+    }
   }
 }
