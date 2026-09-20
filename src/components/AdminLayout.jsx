@@ -4,7 +4,7 @@ import { supabase } from "../lib/supabase";
 import {
   LayoutDashboard, ListChecks, ClipboardList, CreditCard, Users,
   Star, FileText, Heart, FolderTree, Settings, LogOut, Lock,
-  Repeat, Tag, Inbox, ShieldAlert, Globe,
+  Repeat, Tag, Inbox, ShieldAlert, Globe, LayoutTemplate,
 } from "lucide-react";
 
 import AdminDashboard from "./AdminDashboard";
@@ -59,7 +59,7 @@ const NAV_SECTIONS = [
       { id: "reviews",  label: "Αξιολογήσεις", Icon: Star },
       { id: "blog",     label: "Άρθρα Blog",   Icon: FileText },
       { id: "seo",      label: "SEO σελίδες",  Icon: Globe },
-      { id: "cms",      label: "Περιστατικά",  Icon: Heart },
+      { id: "cms",      label: "Κείμενα site", Icon: LayoutTemplate },
     ],
   },
   {

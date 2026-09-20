@@ -1,7 +1,7 @@
 "use client";
 import { useState, useEffect } from "react";
 import { supabase } from "../lib/supabase";
-import { Home, Stethoscope, Users, Settings2, Monitor, Smartphone, RefreshCw, ExternalLink, Eye, EyeOff } from "lucide-react";
+import { Home, Stethoscope, Users, Settings2, Monitor, Smartphone, RefreshCw, ExternalLink, Eye, EyeOff, Link2 } from "lucide-react";
 
 const colors = {
   navy: "#0F172A", blue: "#2563EB", lightBlue: "#EFF6FF",
@@ -55,6 +55,10 @@ export default function CMSPage() {
   const [previewKey, setPreviewKey] = useState(0);
   const [showPreview, setShowPreview] = useState(true);
   const [previewMode, setPreviewMode] = useState("auto");
+
+  const [customUrl, setCustomUrl] = useState("");
+
+  const [editingUrl, setEditingUrl] = useState(false);
   const [previewWidth, setPreviewWidth] = useState("desktop");
 
   useEffect(() => { fetchContent(); }, [activePage, activeSection]);
@@ -110,12 +114,35 @@ export default function CMSPage() {
 
   const sections = SECTIONS[activePage] || [];
 
+  // Η προσαρμοσμένη διεύθυνση μένει στον browser του admin — δεν είναι
+  // ρύθμιση της πλατφόρμας, είναι προτίμηση του καθενός που δουλεύει.
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem("cms_preview_url");
+      if (saved) setCustomUrl(saved);
+    } catch (_) {}
+  }, []);
+
+  function saveCustomUrl(v) {
+    const clean = String(v || "").trim().replace(/\/$/, "");
+    setCustomUrl(clean);
+    try { localStorage.setItem("cms_preview_url", clean); } catch (_) {}
+  }
+
+  // ── ΠΟΙΟ SITE ΔΕΙΧΝΕΙ ΤΟ PREVIEW ──
+  //
+  // Ήταν κλειδωμένο στο production. Όταν δουλεύεις σε κλάδο (redesign),
+  // το preview έδειχνε την ΠΑΛΙΑ έκδοση — έβλεπες κείμενα να αλλάζουν
+  // σε site που δεν είναι αυτό που φτιάχνεις.
+  //
+  // Η διεύθυνση αποθηκεύεται, οπότε δεν τη ξαναγράφεις κάθε φορά.
   const PROD = "https://physio-site2.vercel.app";
   const LOCAL = "http://localhost:3000";
-  const detected =
-    typeof window !== "undefined" && ["localhost", "127.0.0.1"].includes(window.location.hostname)
-      ? LOCAL : PROD;
-  const base = previewMode === "prod" ? PROD : previewMode === "local" ? LOCAL : detected;
+
+  const base =
+    previewMode === "prod"   ? PROD
+    : previewMode === "local" ? LOCAL
+    : (customUrl || PROD);
   const currentPath = (PAGES.find((p) => p.id === activePage) || {}).path || "/";
   const previewUrl = `${base}${currentPath}${currentPath.includes("?") ? "&" : "?"}cmsPreview=${previewKey}`;
 
@@ -188,7 +215,7 @@ export default function CMSPage() {
             <div style={{ background: "#fff", border: "1px solid #E2E8F0", borderRadius: 12, overflow: "hidden" }}>
               <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 10px", borderBottom: "1px solid #F1F5F9", flexWrap: "wrap" }}>
                 <div style={{ display: "flex", gap: 2, background: "#F1F5F9", borderRadius: 8, padding: 2 }}>
-                  {modeBtn("auto", "Auto")}
+                  {modeBtn("auto", "Κλάδος")}
                   {modeBtn("prod", "Live")}
                   {modeBtn("local", "Local")}
                 </div>
@@ -211,12 +238,38 @@ export default function CMSPage() {
                     style={{ padding: "6px", borderRadius: 6, border: "1px solid #E2E8F0", background: "#fff", color: "#475569", cursor: "pointer", display: "flex" }}>
                     <ExternalLink size={14} />
                   </button>
+                  <button onClick={() => setEditingUrl(v => !v)} title="Διεύθυνση preview"
+                    style={{ padding: "6px", borderRadius: 6, border: `1px solid ${editingUrl ? "#1D4ED8" : "#E2E8F0"}`, background: "#fff", color: editingUrl ? "#1D4ED8" : "#475569", cursor: "pointer", display: "flex" }}>
+                    <Link2 size={14} />
+                  </button>
                   <button onClick={() => setShowPreview(false)} title="Απόκρυψη"
                     style={{ padding: "6px", borderRadius: 6, border: "1px solid #E2E8F0", background: "#fff", color: "#475569", cursor: "pointer", display: "flex" }}>
                     <EyeOff size={14} />
                   </button>
                 </div>
               </div>
+
+              {/* Η διεύθυνση του κλάδου. Την παίρνεις από το Vercel:
+                  Deployments → το deployment του κλάδου → Visit. */}
+              {editingUrl && (
+                <div style={{ padding: "10px 12px", borderBottom: "1px solid #F1F5F9", background: "#F8FAFC" }}>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: "#64748B", textTransform: "uppercase", letterSpacing: ".05em", marginBottom: 6 }}>
+                    Διεύθυνση για «Κλάδος»
+                  </div>
+                  <div style={{ display: "flex", gap: 6 }}>
+                    <input
+                      value={customUrl}
+                      onChange={(e) => setCustomUrl(e.target.value)}
+                      placeholder="https://physio-site2-git-redesign-....vercel.app"
+                      style={{ flex: 1, minWidth: 0, padding: "8px 11px", borderRadius: 7, border: "1px solid #E2E8F0", fontSize: 12.5, fontFamily: "inherit", outline: "none", color: "#0F172A" }}
+                    />
+                    <button onClick={() => { saveCustomUrl(customUrl); setPreviewMode("auto"); setPreviewKey(k => k + 1); setEditingUrl(false); }}
+                      style={{ padding: "8px 14px", borderRadius: 7, border: "none", background: "#1D4ED8", color: "#fff", fontSize: 12.5, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", whiteSpace: "nowrap" }}>
+                      Εφαρμογή
+                    </button>
+                  </div>
+                </div>
+              )}
 
               <div style={{ height: "calc(100vh - 210px)", minHeight: 420, background: "#F8FAFC", display: "flex", justifyContent: "center", overflow: "auto" }}>
                 <iframe
