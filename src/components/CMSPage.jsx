@@ -1,7 +1,7 @@
 "use client";
 import { useState, useEffect } from "react";
 import { supabase } from "../lib/supabase";
-import { Home, Stethoscope, Users, Settings2, Monitor, Smartphone, RefreshCw, ExternalLink, Eye, EyeOff, Link2 } from "lucide-react";
+import { Home, Stethoscope, Users, Settings2, Monitor, Smartphone, RefreshCw, ExternalLink, Eye, EyeOff, Link2, Trash2, Plus } from "lucide-react";
 
 const colors = {
   navy: "#0F172A", blue: "#2563EB", lightBlue: "#EFF6FF",
@@ -15,14 +15,91 @@ const PAGES = [
   { id: "howitworks", label: "How It Works", Icon: Settings2, path: "/how-it-works" },
 ];
 
+// ── ΤΑ ΠΕΔΙΑ ΤΗΣ ΑΡΧΙΚΗΣ ──
+//
+// Κάθε key εδώ αντιστοιχεί ΑΚΡΙΒΩΣ σε key του TX object της αρχικής.
+// Αν αποκλίνουν, η αλλαγή αποθηκεύεται αλλά δεν φαίνεται πουθενά —
+// το χειρότερο είδος σφάλματος, γιατί μοιάζει να δούλεψε.
+//
+// Ό,τι μείνει κενό, πέφτει πίσω στο κείμενο του κώδικα. Έτσι μια
+// άδεια βάση δεν αφήνει το site χωρίς λόγια.
+const HOMEPAGE_FIELDS = {
+  hero: [
+    { key: "heroTitle1",   label: "Τίτλος — πρώτο μέρος (navy)" },
+    { key: "heroTitle2",   label: "Τίτλος — δεύτερο μέρος (μπλε)" },
+    { key: "heroDesc",     label: "Υπότιτλος", type: "textarea" },
+    { key: "searchLabel",  label: "Τίτλος αναζήτησης" },
+    { key: "searchPh",     label: "Placeholder πεδίου" },
+    { key: "searchBtn",    label: "Κουμπί αναζήτησης" },
+    { key: "searchHelp",   label: "Βοηθητικό κείμενο", type: "textarea" },
+    { key: "searchNote",   label: "Σημείωση διαδικασίας" },
+    { key: "popular",      label: "Ετικέτα δημοφιλών" },
+  ],
+  strip: [
+    { key: "stripTitle",   label: "Τίτλος" },
+    { key: "strip",        label: "Τα τέσσερα σημεία", type: "list" },
+  ],
+  why: [
+    { key: "whyEyebrow",   label: "Eyebrow" },
+    { key: "whyTitle1",    label: "Τίτλος — πρώτο μέρος" },
+    { key: "whyTitle2",    label: "Τίτλος — έμφαση" },
+    { key: "whyLead",      label: "Κύρια πρόταση", type: "textarea" },
+    { key: "whyP1",        label: "Παράγραφος 1", type: "textarea" },
+    { key: "whyP2",        label: "Παράγραφος 2", type: "textarea" },
+  ],
+  what: [
+    { key: "whatEyebrow",  label: "Eyebrow" },
+    { key: "whatTitle",    label: "Τίτλος" },
+    { key: "whatLead",     label: "Εισαγωγή", type: "textarea" },
+    { key: "what",         label: "Τρεις κάρτες", type: "cards" },
+  ],
+  how: [
+    { key: "howEyebrow",   label: "Eyebrow" },
+    { key: "howTitle",     label: "Τίτλος" },
+    { key: "how",          label: "Τέσσερα βήματα", type: "cards" },
+    { key: "noCard",       label: "Σημείωση «χωρίς κάρτα»", type: "textarea" },
+  ],
+  verify: [
+    { key: "verifyEyebrow", label: "Eyebrow" },
+    { key: "verifyTitle",   label: "Τίτλος" },
+    { key: "verifyLead",    label: "Κείμενο", type: "textarea" },
+    { key: "verifyBtn",     label: "Κουμπί" },
+    { key: "handles",       label: "Ετικέτα «Αναλαμβάνει»" },
+  ],
+  conditions: [
+    { key: "condEyebrow",  label: "Eyebrow" },
+    { key: "condTitle",    label: "Τίτλος" },
+    { key: "condLead",     label: "Υπότιτλος", type: "textarea" },
+    { key: "condAll",      label: "Σύνδεσμος «όλα»" },
+  ],
+  principles: [
+    { key: "prinEyebrow",  label: "Eyebrow" },
+    { key: "prinTitle",    label: "Τίτλος" },
+    { key: "principles",   label: "Τρεις αρχές", type: "cards" },
+  ],
+  areas: [
+    { key: "areaEyebrow",  label: "Eyebrow" },
+    { key: "areaTitle",    label: "Τίτλος" },
+    { key: "areaAll",      label: "Σύνδεσμος «όλες»" },
+  ],
+  final: [
+    { key: "finalTitle",   label: "Τίτλος κλεισίματος", type: "textarea" },
+    { key: "finalDesc",    label: "Κείμενο", type: "textarea" },
+  ],
+};
+
 const SECTIONS = {
   homepage: [
-    { id: "hero", label: "Hero" },
-    { id: "whyus", label: "Why Us" },
-    { id: "howitworks", label: "How It Works" },
-    { id: "benefits", label: "Benefits" },
-    { id: "services", label: "Services" },
-    { id: "faq", label: "FAQ" },
+    { id: "hero",       label: "Hero" },
+    { id: "strip",      label: "Trust strip" },
+    { id: "why",        label: "Γιατί" },
+    { id: "what",       label: "Τι κάνουμε" },
+    { id: "how",        label: "Πώς λειτουργεί" },
+    { id: "verify",     label: "Επαλήθευση" },
+    { id: "conditions", label: "Περιστατικά" },
+    { id: "principles", label: "Αρχές" },
+    { id: "areas",      label: "Περιοχές" },
+    { id: "final",      label: "Τελικό CTA" },
   ],
   services: [
     { id: "hero", label: "Hero" },
@@ -314,13 +391,16 @@ function SectionEditor({ page, section, content, onSave, onUpload, saving, uploa
         </div>
       </div>
 
-      {/* HOMEPAGE */}
-      {page === "homepage" && section === "hero" && <HeroEditor elData={elData} enData={enData} setElData={setElData} setEnData={setEnData} onUpload={onUpload} uploading={uploading} />}
-      {page === "homepage" && section === "whyus" && <WhyUsEditor elData={elData} enData={enData} setElData={setElData} setEnData={setEnData} />}
-      {page === "homepage" && section === "howitworks" && <HowItWorksEditor elData={elData} enData={enData} setElData={setElData} setEnData={setEnData} />}
-      {page === "homepage" && section === "benefits" && <BenefitsEditor elData={elData} enData={enData} setElData={setElData} setEnData={setEnData} onUpload={onUpload} uploading={uploading} />}
-      {page === "homepage" && section === "services" && <ServicesEditor elData={elData} enData={enData} setElData={setElData} setEnData={setEnData} onUpload={onUpload} uploading={uploading} />}
-      {page === "homepage" && section === "faq" && <FaqEditor elData={elData} enData={enData} setElData={setElData} setEnData={setEnData} />}
+      {/* HOMEPAGE — ένας γενικός editor για τις δέκα ενότητες.
+          Δέκα χωριστά components θα ήταν δέκα φορές ο ίδιος κώδικας,
+          και κάθε νέο πεδίο θα απαιτούσε άλλη μια αλλαγή σε JSX. */}
+      {page === "homepage" && HOMEPAGE_FIELDS[section] && (
+        <GenericEditor
+          fields={HOMEPAGE_FIELDS[section]}
+          elData={elData} enData={enData}
+          setElData={setElData} setEnData={setEnData}
+        />
+      )}
 
       {/* SERVICES PAGE */}
       {page === "services" && section === "hero" && <ServicesHeroEditor elData={elData} enData={enData} setElData={setElData} setEnData={setEnData} />}
@@ -433,6 +513,132 @@ function CardList({ items, onChange, fields }) {
 }
 
 // ─── HOMEPAGE EDITORS ─────────────────────────────────────────────────────────
+
+
+// ════════════════════════════════════════════════════════════════════════
+// ΓΕΝΙΚΟΣ EDITOR
+//
+// Οδηγείται από σχήμα, όχι από JSX ανά ενότητα. Νέο πεδίο σημαίνει μία
+// γραμμή στο HOMEPAGE_FIELDS — όχι νέο component.
+//
+// Τέσσερις τύποι:
+//   text     απλή γραμμή
+//   textarea παράγραφος
+//   list     λίστα κειμένων (π.χ. τα τέσσερα σημεία του trust strip)
+//   cards    λίστα {title, desc} (π.χ. τα βήματα του «Πώς λειτουργεί»)
+// ════════════════════════════════════════════════════════════════════════
+function GenericEditor({ fields, elData, enData, setElData, setEnData }) {
+  const [lang, setLang] = useState("el");
+  const data = lang === "el" ? elData : enData;
+  const setData = lang === "el" ? setElData : setEnData;
+  const set = (k, v) => setData({ ...data, [k]: v });
+
+  const input = {
+    width: "100%", padding: "10px 13px", borderRadius: 9,
+    border: "1.5px solid #E2E8F0", fontSize: 14, fontFamily: "inherit",
+    outline: "none", color: "#0F172A", boxSizing: "border-box",
+  };
+
+  return (
+    <div>
+      <div style={{ display: "flex", gap: 3, background: "#F1F5F9", padding: 3, borderRadius: 9, width: "fit-content", marginBottom: 20 }}>
+        {[{ id: "el", label: "Ελληνικά" }, { id: "en", label: "English" }].map(l => (
+          <button key={l.id} onClick={() => setLang(l.id)}
+            style={{ padding: "7px 18px", borderRadius: 7, border: "none", fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "inherit",
+              background: lang === l.id ? "#fff" : "transparent", color: lang === l.id ? "#0F172A" : "#64748B" }}>
+            {l.label}
+          </button>
+        ))}
+      </div>
+
+      {fields.map(f => {
+        const v = data?.[f.key];
+
+        if (f.type === "list") {
+          const items = Array.isArray(v) ? v : [];
+          return (
+            <div key={f.key} style={{ marginBottom: 22 }}>
+              <Lbl>{f.label}</Lbl>
+              {items.map((it, i) => (
+                <div key={i} style={{ display: "flex", gap: 7, marginBottom: 7 }}>
+                  <input value={it} onChange={e => { const n = [...items]; n[i] = e.target.value; set(f.key, n); }} style={input} />
+                  <Del onClick={() => set(f.key, items.filter((_, j) => j !== i))} />
+                </div>
+              ))}
+              <Add onClick={() => set(f.key, [...items, ""])} />
+            </div>
+          );
+        }
+
+        if (f.type === "cards") {
+          const items = Array.isArray(v) ? v : [];
+          return (
+            <div key={f.key} style={{ marginBottom: 22 }}>
+              <Lbl>{f.label}</Lbl>
+              {items.map((it, i) => (
+                <div key={i} style={{ background: "#F8FAFC", border: "1px solid #E2E8F0", borderRadius: 10, padding: 14, marginBottom: 10 }}>
+                  <div style={{ display: "flex", gap: 7, marginBottom: 8 }}>
+                    <input value={it.title || ""} placeholder="Τίτλος"
+                      onChange={e => { const n = [...items]; n[i] = { ...n[i], title: e.target.value }; set(f.key, n); }}
+                      style={{ ...input, fontWeight: 600 }} />
+                    <Del onClick={() => set(f.key, items.filter((_, j) => j !== i))} />
+                  </div>
+                  <textarea value={it.desc || ""} rows={2} placeholder="Περιγραφή"
+                    onChange={e => { const n = [...items]; n[i] = { ...n[i], desc: e.target.value }; set(f.key, n); }}
+                    style={{ ...input, resize: "vertical" }} />
+                </div>
+              ))}
+              <Add onClick={() => set(f.key, [...items, { title: "", desc: "" }])} />
+            </div>
+          );
+        }
+
+        return (
+          <div key={f.key} style={{ marginBottom: 18 }}>
+            <Lbl>{f.label}</Lbl>
+            {f.type === "textarea" ? (
+              <textarea value={v || ""} rows={3} onChange={e => set(f.key, e.target.value)}
+                style={{ ...input, resize: "vertical", lineHeight: 1.6 }} />
+            ) : (
+              <input value={v || ""} onChange={e => set(f.key, e.target.value)} style={input} />
+            )}
+          </div>
+        );
+      })}
+
+      <div style={{ background: "#EFF6FF", border: "1px solid #BFDBFE", borderRadius: 10, padding: "12px 15px", fontSize: 12, color: "#1E40AF", lineHeight: 1.65, marginTop: 8 }}>
+        Ό,τι αφήσεις κενό κρατάει το κείμενο που έχει ήδη το site.
+        Η αλλαγή φαίνεται μόλις πατήσεις «Αποθήκευση».
+      </div>
+    </div>
+  );
+}
+
+function Lbl({ children }) {
+  return (
+    <div style={{ fontSize: 11, fontWeight: 700, color: "#64748B", textTransform: "uppercase", letterSpacing: ".05em", marginBottom: 7 }}>
+      {children}
+    </div>
+  );
+}
+
+function Del({ onClick }) {
+  return (
+    <button onClick={onClick}
+      style={{ background: "transparent", border: "none", color: "#BE123C", cursor: "pointer", padding: 6, display: "flex", flexShrink: 0 }}>
+      <Trash2 size={15} />
+    </button>
+  );
+}
+
+function Add({ onClick }) {
+  return (
+    <button onClick={onClick}
+      style={{ padding: "7px 14px", borderRadius: 8, border: "1px solid #E2E8F0", background: "#fff", color: "#334155", fontSize: 12.5, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", display: "inline-flex", alignItems: "center", gap: 6 }}>
+      <Plus size={13} /> Προσθήκη
+    </button>
+  );
+}
 
 function HeroEditor({ elData, enData, setElData, setEnData, onUpload, uploading }) {
   const [lang, setLang] = useState("el");
