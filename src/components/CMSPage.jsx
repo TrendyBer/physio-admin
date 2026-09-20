@@ -9,10 +9,9 @@ const colors = {
 };
 
 const PAGES = [
-  { id: "homepage", label: "Homepage", Icon: Home, path: "/" },
-  { id: "services", label: "Υπηρεσίες", Icon: Stethoscope, path: "/services" },
+  { id: "homepage", label: "Αρχική", Icon: Home, path: "/" },
   { id: "therapists", label: "Θεραπευτές", Icon: Users, path: "/therapists" },
-  { id: "howitworks", label: "How It Works", Icon: Settings2, path: "/how-it-works" },
+  { id: "howitworks", label: "Πώς λειτουργεί", Icon: Settings2, path: "/how-it-works" },
 ];
 
 // ── ΤΑ ΠΕΔΙΑ ΤΗΣ ΑΡΧΙΚΗΣ ──
@@ -88,6 +87,44 @@ const HOMEPAGE_FIELDS = {
   ],
 };
 
+const THERAPISTS_FIELDS = {
+  hero: [
+    { key: "badge",     label: "Eyebrow" },
+    { key: "hero",      label: "Τίτλος — πρώτο μέρος" },
+    { key: "heroEm",    label: "Τίτλος — έμφαση (μπλε)" },
+    { key: "heroDesc",  label: "Υπότιτλος", type: "textarea" },
+    { key: "bookCta",   label: "Κουμπί" },
+    { key: "trustLine", label: "Τα τέσσερα σημεία εμπιστοσύνης", type: "list" },
+  ],
+};
+
+const HOWITWORKS_FIELDS = {
+  hero: [
+    { key: "badge",       label: "Eyebrow" },
+    { key: "heroTitle",   label: "Τίτλος — πρώτο μέρος" },
+    { key: "heroTitleEm", label: "Τίτλος — έμφαση" },
+    { key: "heroDesc",    label: "Υπότιτλος", type: "textarea" },
+    { key: "tabPatient",  label: "Καρτέλα ασθενών" },
+    { key: "tabTherapist",label: "Καρτέλα θεραπευτών" },
+  ],
+  patient: [
+    { key: "title",    label: "Τίτλος" },
+    { key: "desc",     label: "Εισαγωγή", type: "textarea" },
+    { key: "steps",    label: "Τα βήματα", type: "cards" },
+    { key: "whyTitle", label: "Τίτλος «Γιατί»" },
+    { key: "why",      label: "Λόγοι", type: "list" },
+    { key: "cta",      label: "Κουμπί" },
+  ],
+  therapist: [
+    { key: "title",    label: "Τίτλος" },
+    { key: "desc",     label: "Εισαγωγή", type: "textarea" },
+    { key: "steps",    label: "Τα βήματα", type: "cards" },
+    { key: "whyTitle", label: "Τίτλος «Γιατί»" },
+    { key: "why",      label: "Λόγοι", type: "list" },
+    { key: "cta",      label: "Κουμπί" },
+  ],
+};
+
 const SECTIONS = {
   homepage: [
     { id: "hero",       label: "Hero" },
@@ -101,23 +138,13 @@ const SECTIONS = {
     { id: "areas",      label: "Περιοχές" },
     { id: "final",      label: "Τελικό CTA" },
   ],
-  services: [
-    { id: "hero", label: "Hero" },
-  ],
   therapists: [
     { id: "hero", label: "Hero" },
-    { id: "whywork", label: "Why Work With Us" },
-    { id: "workflow", label: "Workflow Steps" },
-    { id: "platform", label: "Platform" },
   ],
   howitworks: [
-    { id: "hero", label: "Hero" },
-    { id: "steps", label: "Steps" },
-    { id: "whypatients", label: "Why Patients Choose Us" },
-    { id: "whyhome", label: "Why Home Based" },
-    { id: "comparison", label: "Comparison Table" },
-    { id: "cta", label: "CTA Banner" },
-    { id: "faq", label: "FAQ" },
+    { id: "hero",      label: "Hero" },
+    { id: "patient",   label: "Για ασθενείς" },
+    { id: "therapist", label: "Για θεραπευτές" },
   ],
 };
 
@@ -395,30 +422,20 @@ function SectionEditor({ page, section, content, onSave, onUpload, saving, uploa
           Δέκα χωριστά components θα ήταν δέκα φορές ο ίδιος κώδικας,
           και κάθε νέο πεδίο θα απαιτούσε άλλη μια αλλαγή σε JSX. */}
       {page === "homepage" && HOMEPAGE_FIELDS[section] && (
-        <GenericEditor
-          fields={HOMEPAGE_FIELDS[section]}
-          elData={elData} enData={enData}
-          setElData={setElData} setEnData={setEnData}
-        />
+        <GenericEditor fields={HOMEPAGE_FIELDS[section]}
+          elData={elData} enData={enData} setElData={setElData} setEnData={setEnData} />
+      )}
+      {page === "therapists" && THERAPISTS_FIELDS[section] && (
+        <GenericEditor fields={THERAPISTS_FIELDS[section]}
+          elData={elData} enData={enData} setElData={setElData} setEnData={setEnData} />
+      )}
+      {page === "howitworks" && HOWITWORKS_FIELDS[section] && (
+        <GenericEditor fields={HOWITWORKS_FIELDS[section]}
+          elData={elData} enData={enData} setElData={setElData} setEnData={setEnData} />
       )}
 
-      {/* SERVICES PAGE */}
-      {page === "services" && section === "hero" && <ServicesHeroEditor elData={elData} enData={enData} setElData={setElData} setEnData={setEnData} />}
-
-      {/* THERAPISTS PAGE */}
-      {page === "therapists" && section === "hero" && <TherapistsHeroEditor elData={elData} enData={enData} setElData={setElData} setEnData={setEnData} />}
-      {page === "therapists" && section === "whywork" && <WhyWorkEditor elData={elData} enData={enData} setElData={setElData} setEnData={setEnData} onUpload={onUpload} uploading={uploading} />}
-      {page === "therapists" && section === "workflow" && <WorkflowEditor elData={elData} enData={enData} setElData={setElData} setEnData={setEnData} />}
-      {page === "therapists" && section === "platform" && <PlatformEditor elData={elData} enData={enData} setElData={setElData} setEnData={setEnData} />}
-
-      {/* HOW IT WORKS PAGE */}
-      {page === "howitworks" && section === "hero" && <HIWHeroEditor elData={elData} enData={enData} setElData={setElData} setEnData={setEnData} />}
-      {page === "howitworks" && section === "steps" && <HIWStepsEditor elData={elData} enData={enData} setElData={setElData} setEnData={setEnData} />}
-      {page === "howitworks" && section === "whypatients" && <HIWWhyPatientsEditor elData={elData} enData={enData} setElData={setElData} setEnData={setEnData} onUpload={onUpload} uploading={uploading} />}
-      {page === "howitworks" && section === "whyhome" && <HIWWhyHomeEditor elData={elData} enData={enData} setElData={setElData} setEnData={setEnData} onUpload={onUpload} uploading={uploading} />}
-      {page === "howitworks" && section === "comparison" && <HIWComparisonEditor elData={elData} enData={enData} setElData={setElData} setEnData={setEnData} />}
-      {page === "howitworks" && section === "cta" && <HIWCtaEditor elData={elData} enData={enData} setElData={setElData} setEnData={setEnData} />}
-      {page === "howitworks" && section === "faq" && <HIWFaqEditor elData={elData} enData={enData} setElData={setElData} setEnData={setEnData} />}
+      {/* Οι παλιοί editors αφαιρέθηκαν: επεξεργάζονταν ενότητες που δεν
+          υπάρχουν πια στις σελίδες. Ό,τι έμεινε το καλύπτει ο γενικός. */}
     </div>
   );
 }
