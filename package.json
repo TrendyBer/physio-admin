@@ -27,14 +27,20 @@
     "electron-builder": "^25.0.0"
   },
   "productName": "Theralivo Admin",
-  "description": "Theralivo — πίνακας διαχείρισης",
+  "description": "Theralivo admin panel",
   "main": "main.js",
   "build": {
     "appId": "gr.theralivo.admin",
     "productName": "Theralivo Admin",
     "files": [
-      "main.js",
-      "build/**"
+      "**/*",
+      "!.next/**",
+      "!dist/**",
+      "!src/**",
+      "!public/**",
+      "!physiohome-admin-desktop/**",
+      "!**/*.md",
+      "!.git*"
     ],
     "win": {
       "icon": "build/app-icon.ico",
