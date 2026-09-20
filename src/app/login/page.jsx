@@ -60,10 +60,10 @@ export default function LoginPage() {
       alignItems: "center",
       justifyContent: "center",
       padding: "24px",
-      fontFamily: "'DM Sans', sans-serif",
+      fontFamily: "'Manrope', system-ui, sans-serif",
     }}>
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap&subset=greek,latin');
         * { box-sizing: border-box; margin: 0; padding: 0; }
       `}</style>
 
@@ -76,8 +76,15 @@ export default function LoginPage() {
         boxShadow: "0 25px 80px rgba(0,0,0,0.3)",
       }}>
         <div style={{ textAlign: "center", marginBottom: 32 }}>
-          <div style={{ fontSize: 28, fontWeight: 700, color: "#0F172A", marginBottom: 8, letterSpacing: "-0.02em" }}>
-            Physio<span style={{ color: "#38BDF8" }}>Admin</span>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 11, marginBottom: 10 }}>
+            <svg width="30" height="30" viewBox="0 0 40 40" fill="none" aria-hidden="true" style={{ flexShrink: 0 }}>
+              <path d="M5 34 A 27 27 0 0 1 34 7" stroke="#BAE2FD" strokeWidth="4.6" strokeLinecap="round" />
+              <path d="M5 34 A 19 19 0 0 1 24 15" stroke="#2a6fdb" strokeWidth="5.2" strokeLinecap="round" />
+              <circle cx="33" cy="8" r="4.6" fill="#2a6fdb" />
+            </svg>
+            <div style={{ fontSize: 27, fontWeight: 700, color: "#0F172A", letterSpacing: "-0.025em" }}>
+              Theralivo<span style={{ color: "#38BDF8", marginLeft: 7 }}>Admin</span>
+            </div>
           </div>
           <div style={{ fontSize: 13, color: "#94A3B8" }}>Σύνδεση Διαχειριστή</div>
         </div>
@@ -138,7 +145,7 @@ export default function LoginPage() {
               fontSize: 13,
               fontWeight: 500,
             }}>
-              ⚠️ {error}
+              {error}
             </div>
           )}
 
@@ -164,7 +171,7 @@ export default function LoginPage() {
         </form>
 
         <div style={{ marginTop: 20, textAlign: "center", fontSize: 11, color: "#94A3B8" }}>
-          🔒 Μόνο εξουσιοδοτημένο προσωπικό
+          Μόνο εξουσιοδοτημένο προσωπικό
         </div>
       </div>
     </div>
