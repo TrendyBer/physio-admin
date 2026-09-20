@@ -306,7 +306,7 @@ export default function PaymentsPage() {
 
   function handleExport() {
     exportCsv(
-      `physiohome-plirwmes-${new Date().toISOString().slice(0, 10)}.csv`,
+      `theralivo-plirwmes-${new Date().toISOString().slice(0, 10)}.csv`,
       filtered.map((r) => ({
         Θεραπευτής: r.therapist_name,
         Ειδικότητα: r.therapist_specialty,

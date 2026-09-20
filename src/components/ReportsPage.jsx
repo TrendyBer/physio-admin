@@ -187,7 +187,7 @@ export default function ReportsPage() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `physiohome_report_${new Date().toISOString().slice(0,10)}.csv`;
+    a.download = `theralivo_report_${new Date().toISOString().slice(0,10)}.csv`;
     a.click();
   }
 

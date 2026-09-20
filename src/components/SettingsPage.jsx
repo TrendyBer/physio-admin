@@ -123,7 +123,7 @@ const ENFORCEMENT_OPTIONS = [
 export default function SettingsPage() {
   const [settings, setSettings] = useState({
     platform_name: "Theralivo",
-    email: "info@physiohome.gr",
+    email: "info@theralivo.gr",
     contact_email: "",
     phone: "210-123-4567",
     address: "Αθήνα, Ελλάδα",
