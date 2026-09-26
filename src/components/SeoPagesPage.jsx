@@ -26,6 +26,23 @@ import {
 
 const MIN_INTRO = 120;
 
+// Το admin τρέχει σε άλλο domain από το δημόσιο site. Ένα σχετικό link
+// (/pathiseis/...) θα άνοιγε σελίδα του admin, όχι του site.
+const PUBLIC_SITE = "https://theralivo.com";
+
+/*
+  ΠΡΟΣΟΧΗ — ΤΟ ΠΕΔΙΟ content_el ΔΕΝ ΕΙΝΑΙ ΙΔΙΟ ΣΤΟΥΣ ΔΥΟ ΠΙΝΑΚΕΣ
+
+    service_areas.content_el → jsonb, λίστα ενοτήτων { title, body }
+    conditions.content_el    → text, η παράγραφος «Πώς βοηθά η
+                               φυσικοθεραπεία» της σελίδας πάθησης
+
+  Η πρώτη έκδοση αυτού του editor έγραφε λίστα και στις παθήσεις, και
+  αντικατέστησε το κείμενο με "[]". Γι' αυτό οι ενότητες υπάρχουν ΜΟΝΟ
+  για τις περιοχές, και στις παθήσεις το content_el δεν αγγίζεται ποτέ.
+*/
+const HAS_SECTIONS = { conditions: false, areas: true };
+
 function Card({ children, style }) {
   return <div style={{ background: "#fff", borderRadius: 14, border: "1px solid #E2E8F0", overflow: "hidden", ...style }}>{children}</div>;
 }
@@ -182,7 +199,7 @@ export default function SeoPagesPage() {
       seo_title: item.seo_title || "",
       seo_description: item.seo_description || "",
       intro_el: item.intro_el || "",
-      content_el: Array.isArray(item.content_el) ? item.content_el : [],
+      content_el: HAS_SECTIONS[tab] && Array.isArray(item.content_el) ? item.content_el : [],
       faq_el: Array.isArray(item.faq_el) ? item.faq_el : [],
       force_noindex: !!item.force_noindex,
     });
@@ -192,14 +209,19 @@ export default function SeoPagesPage() {
     if (!open) return;
     setBusy(true);
     const table = tab === "conditions" ? "conditions" : "service_areas";
-    const { error: err } = await supabase.from(table).update({
+    const payload = {
       seo_title: form.seo_title.trim() || null,
       seo_description: form.seo_description.trim() || null,
       intro_el: form.intro_el.trim() || null,
-      content_el: form.content_el.filter(s => s.title?.trim() && s.body?.trim()),
       faq_el: form.faq_el.filter(f => f.q?.trim() && f.a?.trim()),
       force_noindex: form.force_noindex,
-    }).eq("id", open.id);
+    };
+    // Μόνο οι περιοχές έχουν ενότητες. Στις παθήσεις το content_el είναι
+    // κείμενο άλλης λειτουργίας και ΔΕΝ περιλαμβάνεται καθόλου στην αποθήκευση.
+    if (HAS_SECTIONS[tab]) {
+      payload.content_el = form.content_el.filter(s => s.title?.trim() && s.body?.trim());
+    }
+    const { error: err } = await supabase.from(table).update(payload).eq("id", open.id);
     setBusy(false);
     if (err) { alert("Σφάλμα: " + err.message); return; }
     setOpen(null);
@@ -364,8 +386,8 @@ export default function SeoPagesPage() {
                     {it.therapists} {it.therapists === 1 ? "θεραπευτής" : "θεραπευτές"}
                   </span>
                   <span>{it.introLen} χαρ. intro</span>
-                  {(it.content_el || []).length > 0 && <span>{it.content_el.length} ενότητες</span>}
-                  {(it.faq_el || []).length > 0 && <span>{it.faq_el.length} ερωτήσεις</span>}
+                  {HAS_SECTIONS[tab] && Array.isArray(it.content_el) && it.content_el.length > 0 && <span>{it.content_el.length} ενότητες</span>}
+                  {Array.isArray(it.faq_el) && it.faq_el.length > 0 && <span>{it.faq_el.length} ερωτήσεις</span>}
                 </div>
 
                 {/* ΤΙ ΑΚΡΙΒΩΣ ΛΕΙΠΕΙ — όχι απλώς «δεν είναι έτοιμη» */}
@@ -376,7 +398,7 @@ export default function SeoPagesPage() {
                 )}
               </div>
 
-              <a href={`${tab === "conditions" ? "/pathiseis" : "/fysiotherapeia-sto-spiti"}/${it.slug}`}
+              <a href={`${PUBLIC_SITE}${tab === "conditions" ? "/pathiseis" : "/fysiotherapeia-sto-spiti"}/${it.slug}`}
                 target="_blank" rel="noopener noreferrer"
                 onClick={e => e.stopPropagation()}
                 style={{ color: "#94A3B8", padding: 4, display: "flex" }}>
@@ -456,7 +478,8 @@ export default function SeoPagesPage() {
                   rows={4} style={{ ...inputStyle, resize: "vertical", lineHeight: 1.65 }} />
               </Field>
 
-              {/* ── ΕΝΟΤΗΤΕΣ ── */}
+              {/* ── ΕΝΟΤΗΤΕΣ — μόνο περιοχές (δες HAS_SECTIONS στην κορυφή) ── */}
+              {HAS_SECTIONS[tab] && (
               <div style={{ borderTop: "1px solid #E2E8F0", paddingTop: 20, marginTop: 24 }}>
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
                   <span style={{ fontSize: 13, fontWeight: 700, color: "#0F172A" }}>Ενότητες περιεχομένου</span>
@@ -497,6 +520,7 @@ export default function SeoPagesPage() {
                   </div>
                 )}
               </div>
+              )}
 
               {/* ── FAQ ── */}
               <div style={{ borderTop: "1px solid #E2E8F0", paddingTop: 20, marginTop: 8 }}>
@@ -561,4 +585,4 @@ export default function SeoPagesPage() {
       )}
     </div>
   );
-}
+}
