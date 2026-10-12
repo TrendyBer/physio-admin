@@ -247,6 +247,7 @@ function TherapistDrawer({ therapist, contact, requests, onClose, onRefresh }) {
   // («Έγκριση» και «Επιβεβαίωση άδειας») που μπορούσαν να αποκλίνουν, και
   // τότε ο θεραπευτής έβλεπε «όλα εντάξει» ενώ παρέμενε αόρατος.
   async function verifyWithDocument() {
+    if (!emailOk) { alert("Ο φυσικοθεραπευτής δεν έχει επιβεβαιώσει ακόμα το email του."); return; }
     setBusy(true);
     const { data: { user } } = await supabase.auth.getUser();
     await supabase.from("therapist_profiles").update({
@@ -268,6 +269,7 @@ function TherapistDrawer({ therapist, contact, requests, onClose, onRefresh }) {
   // καμία διαφορά — το σήμα είναι το ίδιο. Εσωτερικά όμως καταγράφεται
   // ποιος το έκανε και με ποια αιτιολογία.
   async function verifyOffline() {
+    if (!emailOk) { alert("Ο φυσικοθεραπευτής δεν έχει επιβεβαιώσει ακόμα το email του."); return; }
     if (!offlineNote.trim()) { alert("Γράψε την αιτιολογία."); return; }
     setBusy(true);
     const { data: { user } } = await supabase.auth.getUser();
@@ -287,6 +289,23 @@ function TherapistDrawer({ therapist, contact, requests, onClose, onRefresh }) {
     setBusy(false);
     setShowOffline(false);
     setOfflineNote("");
+    await onRefresh();
+  }
+
+  // ── EMAIL ──
+  // Η στήλη υπάρχει μόνο αφού τρέξει το migration-email-verify.sql.
+  // Πριν από αυτό δεν μπλοκάρουμε τίποτα.
+  const emailTracked = "email_verified_at" in therapist;
+  const emailOk = !emailTracked || !!therapist.email_verified_at;
+
+  async function markEmailVerified() {
+    if (!confirm("Σήμανση email ως επιβεβαιωμένο;\n\nΚάν' το μόνο αν έχεις μιλήσει με τον φυσικοθεραπευτή και ξέρεις ότι το email είναι δικό του.")) return;
+    setBusy(true);
+    const { error } = await supabase.from("therapist_profiles")
+      .update({ email_verified_at: new Date().toISOString() })
+      .eq("id", therapist.id);
+    setBusy(false);
+    if (error) { alert("Σφάλμα: " + error.message); return; }
     await onRefresh();
   }
 
@@ -550,6 +569,33 @@ function TherapistDrawer({ therapist, contact, requests, onClose, onRefresh }) {
           {/* ═══ ΕΝΕΡΓΟΠΟΙΗΣΗ ═══ */}
           {tab === "check" && (
             <>
+              {/* ── EMAIL: πρέπει να είναι επιβεβαιωμένο πριν την επαλήθευση ── */}
+              {emailTracked && (
+                <div style={{
+                  background: emailOk ? "#F0FDF4" : "#FFFBEB",
+                  border: `1px solid ${emailOk ? "#BBF7D0" : "#FDE68A"}`,
+                  borderRadius: 14, padding: "14px 20px", marginBottom: 14,
+                  display: "flex", alignItems: "center", gap: 11, flexWrap: "wrap",
+                }}>
+                  <Mail size={16} color={emailOk ? "#15803D" : "#B45309"} strokeWidth={2.2} />
+                  <div style={{ flex: 1, minWidth: 200 }}>
+                    <div style={{ fontSize: 14, fontWeight: 700, color: "#0F172A" }}>
+                      {emailOk ? "Email επιβεβαιωμένο" : "Email μη επιβεβαιωμένο"}
+                    </div>
+                    <div style={{ fontSize: 12.5, color: emailOk ? "#15803D" : "#B45309", marginTop: 2, lineHeight: 1.5 }}>
+                      {emailOk
+                        ? fmtDate(therapist.email_verified_at)
+                        : "Δεν μπορεί να εγκριθεί μέχρι να πατήσει το link στο email καλωσορίσματος. Μπορεί να ζητήσει νέο από τον πίνακά του («Επαναποστολή»)."}
+                    </div>
+                  </div>
+                  {!emailOk && (
+                    <ActionBtn onClick={markEmailVerified} disabled={busy} bg="#fff" color="#B45309" border="#FDE68A" Icon={CheckCircle2}>
+                      Σήμανση ως επιβεβαιωμένο
+                    </ActionBtn>
+                  )}
+                </div>
+              )}
+
               {/* ── ΑΔΕΙΑ: το ένα κουμπί που κάνει τα πάντα ── */}
               <div style={{
                 background: "#fff",
@@ -590,11 +636,11 @@ function TherapistDrawer({ therapist, contact, requests, onClose, onRefresh }) {
                     </div>
                     <div style={{ display: "flex", gap: 9, flexWrap: "wrap" }}>
                       {therapist.license_url && (
-                        <ActionBtn onClick={verifyWithDocument} disabled={busy} bg="#15803D" color="#fff" Icon={ShieldCheck}>
+                        <ActionBtn onClick={verifyWithDocument} disabled={busy || !emailOk} bg="#15803D" color="#fff" Icon={ShieldCheck}>
                           Επαλήθευση με έγγραφο
                         </ActionBtn>
                       )}
-                      <ActionBtn onClick={() => setShowOffline(true)} disabled={busy} bg="#fff" color="#6D28D9" border="#DDD6FE" Icon={ShieldAlert}>
+                      <ActionBtn onClick={() => setShowOffline(true)} disabled={busy || !emailOk} bg="#fff" color="#6D28D9" border="#DDD6FE" Icon={ShieldAlert}>
                         Επαλήθευση χωρίς έγγραφο
                       </ActionBtn>
                     </div>
@@ -789,7 +835,7 @@ function TherapistDrawer({ therapist, contact, requests, onClose, onRefresh }) {
         {/* ═══ ACTION BAR ═══ */}
         <div style={{ position: "sticky", bottom: 0, background: "#fff", borderTop: "1px solid #E2E8F0", padding: "14px 28px", display: "flex", gap: 9, flexWrap: "wrap", alignItems: "center" }}>
           {!therapist.license_verified && (
-            <ActionBtn onClick={() => setShowOffline(true)} disabled={busy} bg="#15803D" color="#fff" Icon={ShieldCheck}>
+            <ActionBtn onClick={() => setShowOffline(true)} disabled={busy || !emailOk} bg="#15803D" color="#fff" Icon={ShieldCheck}>
               Επαλήθευση
             </ActionBtn>
           )}
